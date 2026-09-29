@@ -8,7 +8,7 @@ export default {
       '@semantic-release/exec',
       {
         prepareCmd:
-          'node scripts/set-version.mjs ${nextRelease.version} && pnpm package',
+          'node scripts/set-version.mjs ${nextRelease.version} && pnpm exec biome format --write package.json manifest.json && pnpm package',
       },
     ],
     [

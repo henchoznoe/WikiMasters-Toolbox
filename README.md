@@ -40,7 +40,7 @@ Do not commit credentials. The GitHub repository must be public before using its
 
 ## Validation limits
 
-The automated checks validate the build, package, API interception, and mocked pack opening. The extension was also loaded in Chrome and checked on signed-in collection, marketplace detail, and pack pages. The game's price requests can fail temporarily during busy periods, so affected cards display “Price unavailable” and retry after one minute. No packs were available during the browser test; automatic opening still needs a live check before the first public release.
+The automated checks validate the build, package, API interception, and mocked pack opening. The extension was also loaded in Chrome and checked on signed-in collection, marketplace detail, and pack pages. Automatic pack opening has been verified on the live game. The game's price requests can fail temporarily during busy periods, so affected cards display “Price unavailable” and retry after one minute.
 
 ## License
 
