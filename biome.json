@@ -1,0 +1,73 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    },
+    "enabled": true
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "files": {
+    "includes": [
+      "src/**/*.ts",
+      "scripts/**",
+      "tests/**",
+      "manifest.json",
+      "package.json",
+      "tsconfig.json",
+      "biome.json",
+      "release.config.mjs"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "useEditorconfig": true
+  },
+  "javascript": {
+    "formatter": {
+      "arrowParentheses": "asNeeded",
+      "quoteStyle": "single",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all"
+    },
+    "globals": [],
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "useNodejsImportProtocol": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["release.config.mjs"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
+    }
+  ],
+  "vcs": {
+    "clientKind": "git",
+    "enabled": true,
+    "useIgnoreFile": true
+  }
+}

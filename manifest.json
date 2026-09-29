@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "WikiMasters Toolbox",
+  "version": "0.1.0",
+  "description": "Average card prices and automatic pack opening for WikiMasters.",
+  "minimum_chrome_version": "111",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.wiki-masters.com/*"],
+      "js": ["network.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://www.wiki-masters.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
