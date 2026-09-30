@@ -103,5 +103,11 @@ if (!contentWindow.__wmToolboxContentInstalled) {
     scheduleDailyReset()
     if (getPrefs().enabled) scheduleAuto()
   }
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') scheduleRender()
+  }, 60_000)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') scheduleRender()
+  })
   start()
 }

@@ -478,6 +478,39 @@ test('missing market cards are distinct from temporary price errors', async () =
   assert.equal(context.readPriceQuote('error', 'C').status, 'unavailable')
 })
 
+test('price presentation shows fetch age without implying a sale window', async () => {
+  const context = {
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    IntersectionObserver: class {},
+    Date,
+    Intl,
+  }
+  await exposeModule('prices', ['formatPriceAge', 'presentPrice'], context)
+  const fetchedAt = Date.now() - 2 * 60 * 60 * 1000
+  assert.equal(context.formatPriceAge(fetchedAt, fetchedAt + 30_000), '<1 min')
+  assert.equal(
+    context.formatPriceAge(fetchedAt, fetchedAt + 125 * 60_000),
+    '2 h',
+  )
+  const available = context.presentPrice({
+    status: 'available',
+    average: 125,
+    fetchedAt,
+  })
+  assert.equal(available.value, '125 W')
+  assert.equal(available.age, '2 h')
+  assert.match(available.hint, /source period not specified/)
+  const noSales = context.presentPrice({ status: 'no-sales', fetchedAt })
+  assert.equal(noSales.value, '—')
+  assert.equal(noSales.age, '2 h')
+  const failed = context.presentPrice({ status: 'unavailable', fetchedAt })
+  assert.equal(failed.value, '!')
+  assert.equal(failed.age, '')
+  assert.equal(context.presentPrice({ status: 'loading' }).value, '…')
+})
+
 test('the run recap ranks known prices highest and leaves missing prices last', async () => {
   const context = {
     CSSStyleSheet: class {

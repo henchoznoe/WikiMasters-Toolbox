@@ -77,6 +77,98 @@ export type PriceQuote =
   | { status: 'not-found'; fetchedAt: number }
   | { status: 'available'; average: number; fetchedAt: number }
 
+export function formatPriceAge(fetchedAt: number, now = Date.now()): string {
+  const minutes = Math.floor(Math.max(0, now - fetchedAt) / 60_000)
+  if (minutes < 1) return '<1 min'
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} h`
+  return `${Math.floor(hours / 24)} j`
+}
+
+function priceCheckDate(fetchedAt: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(fetchedAt))
+}
+
+type PricePresentation = {
+  status: PriceQuote['status']
+  value: string
+  age: string
+  hint: string
+}
+
+export function presentPrice(quote: PriceQuote): PricePresentation {
+  if (quote.status === 'loading')
+    return {
+      status: 'loading',
+      value: '…',
+      age: '',
+      hint: 'Loading average sale price',
+    }
+  const checked = priceCheckDate(quote.fetchedAt)
+  if (quote.status === 'unavailable')
+    return {
+      status: quote.status,
+      value: '!',
+      age: '',
+      hint: `Price request failed · last attempt ${checked} · retry in one minute`,
+    }
+  if (quote.status === 'not-found')
+    return {
+      status: quote.status,
+      value: '—',
+      age: '',
+      hint: `No market price found · last attempt ${checked} · retry in one minute`,
+    }
+  const age = formatPriceAge(quote.fetchedAt)
+  if (quote.status === 'no-sales')
+    return {
+      status: quote.status,
+      value: '—',
+      age,
+      hint: `No sales data for this rarity · checked ${checked}`,
+    }
+  return {
+    status: quote.status,
+    value: `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(quote.average)} W`,
+    age,
+    hint: `Average sale price for this rarity · checked ${checked} · source period not specified by WikiMasters`,
+  }
+}
+
+function updatePriceBadge(badge: HTMLElement, quote: PriceQuote): void {
+  const presentation = presentPrice(quote)
+  badge.dataset.status = presentation.status
+  const value = badge.querySelector<HTMLElement>('.wm-price-value')
+  const age = badge.querySelector<HTMLElement>('.wm-price-age')
+  if (value && value.textContent !== presentation.value)
+    value.textContent = presentation.value
+  if (age) {
+    const next = presentation.age ? `· ${presentation.age}` : ''
+    if (age.textContent !== next) age.textContent = next
+    age.hidden = !presentation.age
+  }
+  if (badge.title !== presentation.hint) badge.title = presentation.hint
+  const spoken = `${presentation.status === 'available' ? 'Average sale price' : 'Average sale price status'}: ${presentation.value}${presentation.age ? `, checked ${presentation.age} ago` : ''}. ${presentation.hint}`
+  if (badge.getAttribute('aria-label') !== spoken)
+    badge.setAttribute('aria-label', spoken)
+}
+
+function createPriceBadge(large = false): HTMLElement {
+  const badge = document.createElement('span')
+  badge.className = `wm-price-badge${large ? ' wm-price-badge-large' : ''}`
+  const value = document.createElement('span')
+  value.className = 'wm-price-value'
+  const age = document.createElement('span')
+  age.className = 'wm-price-age'
+  age.hidden = true
+  badge.append(value, age)
+  return badge
+}
+
 export function readPriceQuote(id: string, rarity: string | null): PriceQuote {
   const cached = readCachedPrice(id)
   if (!cached) return { status: 'loading' }
@@ -110,46 +202,38 @@ function getCardElement(heading: Element): HTMLElement | null {
 function renderBadge(card: HTMLElement, id: string): void {
   const heading = card.querySelector('h3')
   if (!heading?.parentElement) return
+  const onCollection = /^\/collection(\/|$)/.test(location.pathname)
+  const stats = onCollection
+    ? heading.parentElement.querySelector<HTMLElement>(':scope > div.mt-auto')
+    : null
+  if (onCollection && !stats) return
   let host = card.querySelector<HTMLElement>('[data-wm-toolbox-price]')
   if (!host) {
-    host = document.createElement('span')
+    host = document.createElement(onCollection ? 'div' : 'span')
     host.dataset.wmToolboxPrice = id
-    const badge = document.createElement('span')
-    badge.className = 'wm-price-badge'
-    createToolboxRoot(host).append(badge)
-    heading.insertAdjacentElement('afterend', host)
+    createToolboxRoot(host).append(createPriceBadge())
+  }
+  if (onCollection) {
+    host.dataset.wmToolboxPriceLayout = 'collection'
+    if (
+      stats &&
+      (host.parentElement !== stats || host !== stats.lastElementChild)
+    )
+      stats.append(host)
+  } else {
+    delete host.dataset.wmToolboxPriceLayout
+    if (host.previousElementSibling !== heading) heading.after(host)
   }
   const badge = host.shadowRoot?.firstElementChild as HTMLElement | null
   if (!badge) return
-  const cached = readCachedPrice(id)
-  if (!cached) {
-    if (badge.textContent !== 'Average price…')
-      badge.textContent = 'Average price…'
-    badge.title = 'Loading average price'
-    visiblePriceObserver.observe(card)
-    return
-  }
-  const average = chosenAverage(
-    cached,
+  const quote = readPriceQuote(
+    id,
     cardsById.get(id)?.rarity || rarityFromElement(card),
   )
-  const formatted =
-    average === null
-      ? '—'
-      : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(
-          average,
-        )
-  const text = cached.ok
-    ? `Avg. ${formatted}${average === null ? '' : ' W'}`
-    : cached.notFound
-      ? 'No market price'
-      : 'Price unavailable'
-  if (badge.textContent !== text) badge.textContent = text
-  badge.title = cached.ok
-    ? 'Average sale price, cached for 24 hours'
-    : cached.notFound
-      ? 'No market price found; retry in one minute'
-      : 'Temporary error; retry in one minute'
+  updatePriceBadge(badge, quote)
+  if (quote.status === 'loading') {
+    visiblePriceObserver.observe(card)
+  }
 }
 
 const visiblePriceObserver = new IntersectionObserver(
@@ -252,27 +336,14 @@ export function renderMarketplace(): void {
   if (!host) {
     host = document.createElement('div')
     host.dataset.wmToolboxMarketplace = '1'
-    const badge = document.createElement('div')
-    badge.className = 'wm-price-badge wm-price-badge-large'
-    createToolboxRoot(host).append(badge)
+    createToolboxRoot(host).append(createPriceBadge(true))
     heading.insertAdjacentElement('afterend', host)
   }
   const badge = host.shadowRoot?.firstElementChild as HTMLElement | null
   if (!badge) return
-  const cached = readCachedPrice(id)
-  if (!cached) {
-    if (badge.textContent !== 'Average price…')
-      badge.textContent = 'Average price…'
-    enqueuePrice(id)
-    return
-  }
-  const average = chosenAverage(cached, cardsById.get(id)?.rarity || null)
-  const text = cached.ok
-    ? `Average price: ${average === null ? '—' : `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(average)} W`}`
-    : cached.notFound
-      ? 'No market price'
-      : 'Average price unavailable'
-  if (badge.textContent !== text) badge.textContent = text
+  const quote = readPriceQuote(id, cardsById.get(id)?.rarity || null)
+  updatePriceBadge(badge, quote)
+  if (quote.status === 'loading') enqueuePrice(id)
 }
 
 export async function hydrateRoute(): Promise<void> {
