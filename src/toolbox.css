@@ -90,13 +90,14 @@
 
 .wm-panel-disclosure {
   display: inline-flex;
-  min-height: 28px;
+  align-items: center;
+  min-height: 24px;
   border: 1px solid #33443a;
-  border-radius: 7px;
-  padding: 4px 8px;
+  border-radius: 6px;
+  padding: 2px 7px;
   background: #1a2420;
   color: #d3e2d7;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .wm-primary-button,
@@ -200,6 +201,74 @@
 .wm-run-summary p {
   margin-top: 6px;
   color: #aec6b7;
+}
+
+.wm-run-body {
+  margin-top: 8px;
+}
+
+.wm-run-total {
+  font-weight: 650;
+}
+
+.wm-run-cards {
+  max-height: min(250px, 35vh);
+  margin-top: 8px;
+  overflow-y: auto;
+  border-top: 1px solid #385145;
+  scrollbar-width: thin;
+  scrollbar-color: #537361 transparent;
+}
+
+.wm-run-card {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 31px;
+  padding: 5px 0;
+  border-bottom: 1px solid #2c4236;
+}
+
+.wm-run-card-multi {
+  grid-template-columns: 25px minmax(0, 1fr) auto auto;
+}
+
+.wm-run-pack-tag {
+  color: #92ab9b;
+  font-size: 9px;
+}
+
+.wm-run-rarity {
+  border-radius: 4px;
+  padding: 2px 0;
+  background: #344339;
+  color: #e0eee3;
+  font-size: 9px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.wm-run-rarity[data-rarity='l'] { background: #ffe05d; color: #27210a; }
+.wm-run-rarity[data-rarity='ur'] { background: #ff9c2e; color: #29170a; }
+.wm-run-rarity[data-rarity='sr'] { background: #ee75a7; color: #2c1020; }
+.wm-run-rarity[data-rarity='r'] { background: #b895e2; color: #21152e; }
+.wm-run-rarity[data-rarity='pc'] { background: #abcaf0; color: #122337; }
+.wm-run-rarity[data-rarity='c'] { background: #a8ebcc; color: #113124; }
+
+.wm-run-card-title {
+  min-width: 0;
+  overflow: hidden;
+  color: #e4eee7;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wm-run-card-price {
+  color: #bceccc;
+  font-size: 10px;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .wm-quiet-button {
@@ -456,8 +525,9 @@
 }
 
 .wm-stats-controls .wm-quiet-button {
-  min-height: 30px;
-  padding: 5px 8px;
+  min-height: 24px;
+  padding: 3px 7px;
+  font-size: 10px;
   white-space: nowrap;
 }
 

@@ -201,7 +201,7 @@ export function renderStats(): void {
   const resetButton = document.createElement('button')
   resetButton.type = 'button'
   resetButton.className = 'wm-quiet-button'
-  resetButton.textContent = 'Reset counts'
+  resetButton.textContent = 'Reset'
   resetButton.addEventListener('click', () => {
     if (!window.confirm('Reset all pack statistics?')) return
     void updateStats(current => emptyStats(current.dailyReset))

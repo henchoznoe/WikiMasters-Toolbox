@@ -38,6 +38,7 @@ function scheduleRender(): void {
     renderCards()
     renderMarketplace()
     syncToolboxPanel(location.pathname, toolboxPages)
+    renderRunSummary()
   }, 80)
 }
 setPriceRenderCallback(scheduleRender)

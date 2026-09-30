@@ -262,7 +262,14 @@ test('manual bulk opening refreshes the game after every available pack is opene
       requests += 1
       return new Response(
         JSON.stringify({
-          cards: [{ id: `card-${requests}`, rarity: 'R' }],
+          cards: [
+            {
+              card_id: `card-${requests}`,
+              snapshot_rarity: 'R',
+              rarity: 'R',
+              card: { wikipedia_title: `Card ${requests}` },
+            },
+          ],
           packs_remaining: 3 - requests,
         }),
       )
@@ -297,6 +304,14 @@ test('manual bulk opening refreshes the game after every available pack is opene
   const summary = JSON.parse(stored.get('session:wm_toolbox_last_pack_run_v1'))
   assert.equal(summary.opened, 3)
   assert.equal(summary.detail, 'No packs remain.')
+  assert.equal(summary.cards.length, 3)
+  assert.deepEqual(JSON.parse(JSON.stringify(summary.cards[0])), {
+    id: 'card-1',
+    title: 'Card 1',
+    rarity: 'R',
+    pack: 1,
+  })
+  assert.equal(summary.expanded, true)
 })
 
 test('a manual pack limit stops without requesting an extra pack', async () => {
@@ -304,6 +319,13 @@ test('a manual pack limit stops without requesting an extra pack', async () => {
   let requests = 0
   let reloads = 0
   const context = {
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    IntersectionObserver: class {
+      observe() {}
+      unobserve() {}
+    },
     window: { addEventListener() {} },
     document: { body: null, querySelector: () => null },
     location: {
@@ -331,7 +353,13 @@ test('a manual pack limit stops without requesting an extra pack', async () => {
       requests += 1
       return new Response(
         JSON.stringify({
-          cards: [{ id: `card-${requests}`, rarity: 'C' }],
+          cards: [
+            {
+              id: `card-${requests}`,
+              wikipedia_title: `Card ${requests}`,
+              rarity: 'C',
+            },
+          ],
           packs_remaining: 5 - requests,
         }),
       )
@@ -364,6 +392,8 @@ test('a manual pack limit stops without requesting an extra pack', async () => {
   const summary = JSON.parse(stored.get('session:wm_toolbox_last_pack_run_v1'))
   assert.equal(summary.opened, 2)
   assert.equal(summary.detail, 'Reached your 2-pack limit.')
+  assert.equal(summary.cards.length, 2)
+  assert.equal(summary.cards[1].title, 'Card 2')
 })
 
 test('scheduled opening uses local 24-hour time', async () => {
@@ -387,6 +417,90 @@ test('scheduled opening uses local 24-hour time', async () => {
   assert.equal(context.formatLocalTime(timestamp), '22h24')
 })
 
+test('card prices use the opened rarity without borrowing another rarity', async () => {
+  const context = {
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    IntersectionObserver: class {
+      observe() {}
+      unobserve() {}
+    },
+    localStorage: {
+      getItem: key =>
+        key === 'wm_toolbox_price_v1_card-1'
+          ? JSON.stringify({
+              fetchedAt: Date.now(),
+              ok: true,
+              averages: { R: 25 },
+            })
+          : null,
+    },
+    Date,
+  }
+  await exposeModule('prices', ['readPriceQuote'], context)
+  const quote = context.readPriceQuote('card-1', 'R')
+  assert.equal(quote.status, 'available')
+  assert.equal(quote.average, 25)
+  assert.ok(quote.fetchedAt <= Date.now())
+  assert.equal(context.readPriceQuote('card-1', 'UR').status, 'no-sales')
+})
+
+test('missing market cards are distinct from temporary price errors', async () => {
+  const entries = new Map([
+    [
+      'wm_toolbox_price_v1_missing',
+      JSON.stringify({
+        fetchedAt: Date.now(),
+        ok: false,
+        notFound: true,
+        averages: {},
+      }),
+    ],
+    [
+      'wm_toolbox_price_v1_error',
+      JSON.stringify({ fetchedAt: Date.now(), ok: false, averages: {} }),
+    ],
+  ])
+  const context = {
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    IntersectionObserver: class {
+      observe() {}
+      unobserve() {}
+    },
+    localStorage: { getItem: key => entries.get(key) || null },
+    Date,
+  }
+  await exposeModule('prices', ['readPriceQuote'], context)
+  assert.equal(context.readPriceQuote('missing', 'C').status, 'not-found')
+  assert.equal(context.readPriceQuote('error', 'C').status, 'unavailable')
+})
+
+test('the run recap ranks known prices highest and leaves missing prices last', async () => {
+  const context = {
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    IntersectionObserver: class {
+      observe() {}
+      unobserve() {}
+    },
+  }
+  await exposeModule('run-summary', ['compareRunPrices'], context)
+  const priced = [
+    { status: 'available', average: 4, fetchedAt: 1 },
+    { status: 'unavailable', fetchedAt: 1 },
+    { status: 'available', average: 25, fetchedAt: 1 },
+  ]
+  priced.sort(context.compareRunPrices)
+  assert.deepEqual(
+    priced.map(quote => quote.average ?? null),
+    [25, 4, null],
+  )
+})
+
 test('two due tabs share one automatic run and one next schedule', async () => {
   const initial = {
     enabled: true,
@@ -408,7 +522,15 @@ test('two due tabs share one automatic run and one next schedule', async () => {
     },
   }
   let requests = 0
+  const summaries = []
   const makeContext = () => ({
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    IntersectionObserver: class {
+      observe() {}
+      unobserve() {}
+    },
     window: { addEventListener() {} },
     document: { querySelector: () => null },
     location: { pathname: '/', reload: () => {} },
@@ -419,12 +541,20 @@ test('two due tabs share one automatic run and one next schedule', async () => {
         if (key === 'wm_toolbox_auto_v1') autoWrites.push(JSON.parse(value))
       },
     },
-    sessionStorage: { getItem: () => null, setItem: () => {} },
+    sessionStorage: {
+      getItem: () => null,
+      setItem: (_key, value) => summaries.push(JSON.parse(value)),
+    },
     navigator: { locks },
     fetch: async () => {
       requests += 1
       return new Response(
-        JSON.stringify({ cards: [{ rarity: 'R' }], packs_remaining: 0 }),
+        JSON.stringify({
+          cards: [
+            { id: 'card-auto', wikipedia_title: 'Auto card', rarity: 'R' },
+          ],
+          packs_remaining: 0,
+        }),
       )
     },
     Response,
@@ -446,6 +576,9 @@ test('two due tabs share one automatic run and one next schedule', async () => {
   assert.equal(autoWrites.length, 2)
   assert.equal(autoWrites[0].nextAt, 0)
   assert.ok(autoWrites[1].nextAt > Date.now())
+  assert.equal(summaries.length, 1)
+  assert.equal(summaries[0].mode, 'auto')
+  assert.equal(summaries[0].cards[0].title, 'Auto card')
 })
 
 test('daily statistics reset after the local date changes', async () => {
