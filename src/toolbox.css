@@ -335,6 +335,72 @@
   font-weight: 700;
 }
 
+.wm-stat[data-rarity]:not([data-rarity='other']) {
+  border-color: var(--wm-stat-border);
+  background:
+    radial-gradient(ellipse 70% 115% at 15% 125%, #ffffff99, transparent 72%),
+    repeating-radial-gradient(
+      ellipse at 110% 125%,
+      #ffffff00 0 9px,
+      #ffffff3d 10px 11px,
+      #ffffff00 13px 21px
+    ),
+    linear-gradient(125deg, var(--wm-stat-light), var(--wm-stat-deep));
+}
+
+.wm-stat[data-rarity]:not([data-rarity='other']) .wm-stat-label {
+  border-radius: 4px;
+  padding: 2px 4px;
+  background: var(--wm-stat-badge);
+  color: #1b211e;
+}
+
+.wm-stat[data-rarity]:not([data-rarity='other']) .wm-stat-count {
+  color: #1b211e;
+}
+
+.wm-stat[data-rarity='l'] {
+  --wm-stat-light: #fff19a;
+  --wm-stat-deep: #d9a30d;
+  --wm-stat-border: #b98a16;
+  --wm-stat-badge: #ffe05d;
+}
+
+.wm-stat[data-rarity='ur'] {
+  --wm-stat-light: #ffe0a0;
+  --wm-stat-deep: #f18b2b;
+  --wm-stat-border: #c67920;
+  --wm-stat-badge: #ff9c2e;
+}
+
+.wm-stat[data-rarity='sr'] {
+  --wm-stat-light: #ffd9e9;
+  --wm-stat-deep: #ee8db9;
+  --wm-stat-border: #cb709b;
+  --wm-stat-badge: #ee75a7;
+}
+
+.wm-stat[data-rarity='r'] {
+  --wm-stat-light: #e9dcf8;
+  --wm-stat-deep: #bd9cdd;
+  --wm-stat-border: #9877bb;
+  --wm-stat-badge: #b895e2;
+}
+
+.wm-stat[data-rarity='pc'] {
+  --wm-stat-light: #e1f0ff;
+  --wm-stat-deep: #a9cdef;
+  --wm-stat-border: #7aa4ce;
+  --wm-stat-badge: #abcaf0;
+}
+
+.wm-stat[data-rarity='c'] {
+  --wm-stat-light: #dcf8e9;
+  --wm-stat-deep: #a5dec4;
+  --wm-stat-border: #75ae94;
+  --wm-stat-badge: #a8ebcc;
+}
+
 .wm-stats-controls {
   display: flex;
   align-items: center;

@@ -15,7 +15,10 @@ The current Packs Toolbox covers average card prices, manual and automatic pack 
 3. Preserve a short result summary after the page reloads, including the number of packs opened and any error or stop reason.
 4. Coordinate automatic schedules across open tabs, in addition to the existing opening lock, so only one tab owns the next scheduled attempt.
 5. Review whether the game's remaining-pack counter can be refreshed without a full page reload, using a supported game update path if one becomes available.
-6. Style the six rarity statistic tiles with the corresponding card colors and subtle decorative details, while keeping counts readable and accessible.
+
+## Completed visual improvements
+
+- Styled the six rarity statistic tiles with card-inspired colors and subtle decorative details while keeping counts readable.
 
 ## Other pages
 

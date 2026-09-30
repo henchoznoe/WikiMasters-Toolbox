@@ -132,6 +132,7 @@ export function renderStats(): void {
     if (rarity === 'Other' && stats.counts.Other === 0) continue
     const tile = document.createElement('div')
     tile.className = 'wm-stat'
+    tile.dataset.rarity = rarity.toLowerCase()
     const label = document.createElement('span')
     label.className = 'wm-stat-label'
     label.textContent = rarity
