@@ -16,11 +16,11 @@ The current Packs Toolbox covers average card prices, manual and automatic pack 
 5. Reviewed the game's pack counter update path. No supported read endpoint or client refresh event is available to the extension, so a run that opens packs still reloads the page to update the game's own counter.
 6. Style the six rarity statistic tiles with card-inspired colors and subtle decorative details while keeping counts readable.
 7. Show cards and average sale prices from the last manual or automatic run in a compact, scrollable summary, with known prices sorted highest first.
+8. Show the age of each loaded average price from its local fetch time, with the exact check time on hover. Keep loading and missing-price states compact on collection cards and marketplace details.
 
 ## Future ideas
 
 - Investigate isolated account profiles and quick switching, including separate sessions, preferences, and caches, while respecting the game's account rules.
-- Show the freshness of each cached average price, using its saved calculation time (for example, “<1 min” or “>1 day”).
 
 ## Other pages
 

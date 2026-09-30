@@ -1,5 +1,10 @@
 import { getAccountId } from './account'
-import { type PriceQuote, readPriceQuote, requestPriceQuote } from './prices'
+import {
+  type PriceQuote,
+  presentPrice,
+  readPriceQuote,
+  requestPriceQuote,
+} from './prices'
 
 export type RunCard = {
   id: string | null
@@ -125,12 +130,8 @@ function priceText(quote: PriceQuote | null): string {
 
 function priceHint(quote: PriceQuote | null): string {
   if (!quote) return 'No market identifier for this card'
-  if (quote.status === 'loading') return 'Loading average sale price'
-  if (quote.status === 'not-found') return 'No market price found'
-  if (quote.status === 'no-sales') return 'No sales data for this rarity'
-  if (quote.status === 'unavailable')
-    return 'Average price temporarily unavailable'
-  return 'Average sale price'
+  const presentation = presentPrice(quote)
+  return `${presentation.hint}${presentation.age ? ` · loaded ${presentation.age} ago` : ''}`
 }
 
 export function compareRunPrices(

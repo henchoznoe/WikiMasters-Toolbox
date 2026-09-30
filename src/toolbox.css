@@ -11,20 +11,64 @@
 .wm-price-badge {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
+  max-width: 100%;
   margin-top: 4px;
-  border: 1px solid #246e4d;
-  border-radius: 6px;
-  padding: 3px 7px;
-  background: #123425;
-  color: #d1f6e1;
+  border: 1px solid #4c6759;
+  border-radius: 7px;
+  padding: 3px 6px;
+  background: #111b17ee;
+  box-shadow: 0 2px 6px #0003;
+  color: #f0f7f1;
   font-size: 11px;
-  font-weight: 700;
-  line-height: 1.25;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.wm-price-age {
+  color: #a7b8ad;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.wm-price-badge[data-status='no-sales'],
+.wm-price-badge[data-status='not-found'],
+.wm-price-badge[data-status='loading'] {
+  border-color: #566259;
+}
+
+.wm-price-badge[data-status='unavailable'] {
+  border-color: #9a685e;
+}
+
+.wm-price-badge[data-status='unavailable'] .wm-price-value {
+  color: #f3b9ac;
 }
 
 .wm-price-badge-large {
   margin-top: 8px;
-  padding: 7px 10px;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
+:host([data-wm-toolbox-price-layout='collection']) {
+  display: flex;
+  width: 100%;
+  flex: none;
+  justify-content: center;
+}
+
+:host([data-wm-toolbox-price-layout='collection']) .wm-price-badge {
+  justify-content: center;
+  margin-top: 0;
+  padding: 4px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px #0005;
+}
+
+:host([data-wm-toolbox-price-layout='collection']) .wm-price-value {
   font-size: 13px;
 }
 
