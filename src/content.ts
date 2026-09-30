@@ -33,12 +33,20 @@ type PackResponse = {
   error?: string
   message?: string
 }
+type PackStats = {
+  day: string
+  dailyReset: boolean
+  packs: number
+  counts: Record<string, number>
+}
 
 const PRICE_TTL = 24 * 60 * 60 * 1000
 const ERROR_TTL = 60 * 1000
 const PRICE_PREFIX = 'wm_toolbox_price_v1_'
 const AUTO_KEY = 'wm_toolbox_auto_v1'
+const STATS_KEY = 'wm_toolbox_pack_stats_v1'
 const MAX_PACKS_PER_CYCLE = 100
+const RARITIES = ['L', 'UR', 'SR', 'R', 'PC', 'C', 'Other'] as const
 const cardsById = new Map<string, Card>()
 const idsByTitle = new Map<string, string>()
 const prices = new Map<string, PriceEntry>()
@@ -127,8 +135,7 @@ function renderBadge(card: HTMLElement, id: string): void {
     host = document.createElement('span')
     host.dataset.wmToolboxPrice = id
     const badge = document.createElement('span')
-    badge.className =
-      'wm:mt-1 wm:inline-flex wm:rounded-md wm:bg-sky-950 wm:px-2 wm:py-0.5 wm:text-xs wm:font-semibold wm:text-sky-100'
+    badge.className = 'wm-price-badge'
     createToolboxRoot(host).append(badge)
     heading.insertAdjacentElement('afterend', host)
   }
@@ -258,8 +265,7 @@ function renderMarketplace(): void {
     host = document.createElement('div')
     host.dataset.wmToolboxMarketplace = '1'
     const badge = document.createElement('div')
-    badge.className =
-      'wm:mt-2 wm:inline-flex wm:rounded-lg wm:bg-sky-950 wm:px-3 wm:py-2 wm:text-sm wm:font-semibold wm:text-sky-100'
+    badge.className = 'wm-price-badge wm-price-badge-large'
     createToolboxRoot(host).append(badge)
     heading.insertAdjacentElement('afterend', host)
   }
@@ -279,6 +285,105 @@ function renderMarketplace(): void {
   if (badge.textContent !== text) badge.textContent = text
 }
 
+function localDay(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function emptyStats(dailyReset = false): PackStats {
+  return {
+    day: localDay(),
+    dailyReset,
+    packs: 0,
+    counts: Object.fromEntries(RARITIES.map(rarity => [rarity, 0])),
+  }
+}
+
+function writeStats(stats: PackStats): void {
+  try {
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats))
+  } catch {
+    /* Storage unavailable. */
+  }
+}
+
+function readStats(): PackStats {
+  try {
+    const raw = localStorage.getItem(STATS_KEY)
+    if (!raw) return emptyStats()
+    const parsed = JSON.parse(raw) as Partial<PackStats>
+    const stats: PackStats = {
+      day: typeof parsed.day === 'string' ? parsed.day : localDay(),
+      dailyReset: parsed.dailyReset === true,
+      packs: Math.max(0, Math.floor(Number(parsed.packs) || 0)),
+      counts: Object.fromEntries(
+        RARITIES.map(rarity => [
+          rarity,
+          Math.max(0, Math.floor(Number(parsed.counts?.[rarity]) || 0)),
+        ]),
+      ),
+    }
+    if (stats.dailyReset && stats.day !== localDay()) {
+      const reset = emptyStats(true)
+      writeStats(reset)
+      return reset
+    }
+    return stats
+  } catch {
+    return emptyStats()
+  }
+}
+
+async function updateStats(
+  change: (stats: PackStats) => PackStats,
+): Promise<void> {
+  const update = (): void => {
+    writeStats(change(readStats()))
+    renderStats()
+    scheduleDailyReset()
+  }
+  if (navigator.locks)
+    await navigator.locks.request('wm-toolbox-pack-stats', update)
+  else update()
+}
+
+async function recordPack(cards: unknown[]): Promise<void> {
+  if (!cards.length) return
+  await updateStats(stats => {
+    stats.packs += 1
+    for (const value of cards) {
+      const rarity =
+        value && typeof value === 'object' && 'rarity' in value
+          ? (value as { rarity?: unknown }).rarity
+          : null
+      const key =
+        typeof rarity === 'string' &&
+        RARITIES.includes(rarity as (typeof RARITIES)[number])
+          ? rarity
+          : 'Other'
+      stats.counts[key] += 1
+    }
+    return stats
+  })
+}
+
+let dailyResetTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleDailyReset(): void {
+  if (dailyResetTimer) clearTimeout(dailyResetTimer)
+  dailyResetTimer = null
+  if (!readStats().dailyReset) return
+  const now = new Date()
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  dailyResetTimer = setTimeout(
+    () => {
+      readStats()
+      renderStats()
+      scheduleDailyReset()
+    },
+    Math.max(1_000, next.getTime() - now.getTime() + 100),
+  )
+}
+
 const DEFAULT_PREFS: AutoPrefs = {
   enabled: false,
   minMinutes: 20,
@@ -288,6 +393,7 @@ const DEFAULT_PREFS: AutoPrefs = {
 let prefs = readPrefs()
 let autoTimer: ReturnType<typeof setTimeout> | null = null
 let runController: AbortController | null = null
+let runMode: 'manual' | 'auto' | null = null
 let statusText = 'Disabled'
 let openedThisCycle = 0
 
@@ -418,8 +524,9 @@ async function openOnePack(signal: AbortSignal): Promise<PackResponse> {
   throw new Error('Opening stopped by the game rate limit')
 }
 
-async function openAvailablePacks(signal: AbortSignal): Promise<void> {
+async function openAvailablePacks(signal: AbortSignal): Promise<boolean> {
   openedThisCycle = 0
+  let remaining = Number.NaN
   for (let index = 0; index < MAX_PACKS_PER_CYCLE; index += 1) {
     if (signal.aborted) throw signal.reason
     setStatus(`Opening packs: ${openedThisCycle} opened`)
@@ -429,17 +536,20 @@ async function openAvailablePacks(signal: AbortSignal): Promise<void> {
       throw new Error('The game returned a pack without cards')
     }
     openedThisCycle += 1
-    const remaining = Number(response.packs_remaining)
+    remaining = Number(response.packs_remaining)
+    await recordPack(response.cards)
+    updateOpenAllButton()
     if (Number.isFinite(remaining) && remaining <= 0) break
     await wait(500 + Math.round(Math.random() * 1_500), signal)
   }
+  return openedThisCycle === MAX_PACKS_PER_CYCLE && remaining > 0
 }
 
-async function runAuto(): Promise<void> {
-  if (!prefs.enabled || runController) return
+async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
+  if (runController || (mode === 'auto' && !prefs.enabled)) return
   if (!navigator.locks) {
     setStatus('Cross-tab lock unavailable')
-    scheduleAuto(true)
+    if (mode === 'auto') scheduleAuto(true)
     return
   }
   await navigator.locks.request(
@@ -448,18 +558,24 @@ async function runAuto(): Promise<void> {
     async lock => {
       if (!lock) {
         setStatus('Another tab is opening packs')
-        scheduleAuto(true)
+        if (mode === 'auto') scheduleAuto(true)
         return
       }
       prefs = readPrefs()
-      if (!prefs.enabled) return
+      if (mode === 'auto' && !prefs.enabled) return
       runController = new AbortController()
-      prefs.nextAt = 0
-      writePrefs()
+      runMode = mode
+      if (mode === 'auto') {
+        prefs.nextAt = 0
+        writePrefs()
+      }
+      updateOpenAllButton()
       try {
-        await openAvailablePacks(runController.signal)
+        const capped = await openAvailablePacks(runController.signal)
         setStatus(
-          `${openedThisCycle} pack${openedThisCycle === 1 ? '' : 's'} opened`,
+          capped
+            ? `Stopped after ${MAX_PACKS_PER_CYCLE} packs. Run again to continue.`
+            : `${openedThisCycle} pack${openedThisCycle === 1 ? '' : 's'} opened`,
         )
       } catch (error) {
         setStatus(
@@ -469,11 +585,17 @@ async function runAuto(): Promise<void> {
         )
       } finally {
         runController = null
+        runMode = null
+        updateOpenAllButton()
         prefs = readPrefs()
         if (prefs.enabled) scheduleAuto(true)
       }
     },
   )
+}
+
+async function runAuto(): Promise<void> {
+  await runPacks('auto')
 }
 
 function makeInput(
@@ -482,23 +604,137 @@ function makeInput(
   onChange: (value: number) => void,
 ): HTMLLabelElement {
   const label = document.createElement('label')
-  label.className = 'wm:flex wm:flex-col wm:gap-1 wm:text-xs wm:text-slate-300'
-  label.textContent = labelText
+  label.className = 'wm-field'
+  const caption = document.createElement('span')
+  caption.textContent = labelText
   const input = document.createElement('input')
   input.type = 'number'
   input.min = '1'
   input.max = '10080'
   input.value = String(value)
-  input.className =
-    'wm:w-full wm:rounded-md wm:border wm:border-slate-600 wm:bg-slate-800 wm:px-2 wm:py-1 wm:text-sm wm:text-white'
   input.addEventListener('change', () => onChange(Number(input.value)))
-  label.append(input)
+  label.append(caption, input)
   return label
+}
+
+function updateOpenAllButton(): void {
+  const button = document
+    .querySelector<HTMLElement>('[data-wm-toolbox-panel]')
+    ?.shadowRoot?.querySelector<HTMLButtonElement>('[data-wm-toolbox-open-all]')
+  if (!button) return
+  button.disabled = runMode === 'auto'
+  button.textContent =
+    runMode === 'manual'
+      ? `Stop opening (${openedThisCycle})`
+      : runMode === 'auto'
+        ? 'Opening automatically…'
+        : 'Open all available packs'
+}
+
+function renderStats(): void {
+  const container = document
+    .querySelector<HTMLElement>('[data-wm-toolbox-panel]')
+    ?.shadowRoot?.querySelector<HTMLElement>('[data-wm-toolbox-stats]')
+  if (!container) return
+  const stats = readStats()
+  const total = Object.values(stats.counts).reduce(
+    (sum, count) => sum + count,
+    0,
+  )
+  const title = document.createElement('h3')
+  title.className = 'wm-stats-title'
+  title.textContent = 'Pack statistics'
+  const summary = document.createElement('p')
+  summary.className = 'wm-stats-summary'
+  summary.textContent = `${stats.packs} pack${stats.packs === 1 ? '' : 's'} · ${total} card${total === 1 ? '' : 's'}`
+  const head = document.createElement('div')
+  head.className = 'wm-stats-head'
+  head.append(title, summary)
+  const grid = document.createElement('div')
+  grid.className = 'wm-stats-grid'
+  for (const rarity of RARITIES) {
+    if (rarity === 'Other' && stats.counts.Other === 0) continue
+    const tile = document.createElement('div')
+    tile.className = 'wm-stat'
+    const label = document.createElement('span')
+    label.className = 'wm-stat-label'
+    label.textContent = rarity
+    const count = document.createElement('span')
+    count.className = 'wm-stat-count'
+    count.textContent = String(stats.counts[rarity])
+    tile.append(label, count)
+    grid.append(tile)
+  }
+  const controls = document.createElement('div')
+  controls.className = 'wm-stats-controls'
+  const dailyLabel = document.createElement('label')
+  dailyLabel.className = 'wm-setting-toggle'
+  dailyLabel.title =
+    'Reset at local midnight, or on the next visit if Chrome is closed'
+  const dailyToggle = document.createElement('input')
+  dailyToggle.type = 'checkbox'
+  dailyToggle.checked = stats.dailyReset
+  dailyToggle.addEventListener('change', () => {
+    void updateStats(current => ({
+      ...current,
+      day: localDay(),
+      dailyReset: dailyToggle.checked,
+    }))
+  })
+  const dailyTrack = document.createElement('span')
+  dailyTrack.className = 'wm-switch'
+  dailyTrack.setAttribute('aria-hidden', 'true')
+  dailyLabel.append(
+    dailyToggle,
+    dailyTrack,
+    document.createTextNode('Daily reset'),
+  )
+  const resetButton = document.createElement('button')
+  resetButton.type = 'button'
+  resetButton.className = 'wm-quiet-button'
+  resetButton.textContent = 'Reset counts'
+  resetButton.addEventListener('click', () => {
+    if (!window.confirm('Reset all pack statistics?')) return
+    void updateStats(current => emptyStats(current.dailyReset))
+  })
+  controls.append(dailyLabel, resetButton)
+  container.replaceChildren(head, grid, controls)
+}
+
+function confirmOpenAll(button: HTMLButtonElement): void {
+  const root = button.getRootNode() as ShadowRoot
+  if (root.querySelector('[data-wm-toolbox-confirm]')) return
+  const confirmation = document.createElement('div')
+  confirmation.dataset.wmToolboxConfirm = '1'
+  confirmation.className = 'wm-confirmation'
+  const warning = document.createElement('p')
+  warning.textContent =
+    'Open every available pack now? This consumes the packs.'
+  const actions = document.createElement('div')
+  actions.className = 'wm-confirmation-actions'
+  const cancel = document.createElement('button')
+  cancel.type = 'button'
+  cancel.className = 'wm-quiet-button'
+  cancel.textContent = 'Cancel'
+  cancel.addEventListener('click', () => confirmation.remove())
+  const proceed = document.createElement('button')
+  proceed.type = 'button'
+  proceed.className = 'wm-primary-button'
+  proceed.textContent = 'Open packs'
+  proceed.addEventListener('click', () => {
+    confirmation.remove()
+    void runPacks('manual')
+  })
+  actions.append(cancel, proceed)
+  confirmation.append(warning, actions)
+  button.insertAdjacentElement('afterend', confirmation)
 }
 
 function ensureAutoPanel(): void {
   const existing = document.querySelector('[data-wm-toolbox-panel]')
   if (!/^\/pulls(\/|$)/.test(location.pathname)) {
+    if (runMode === 'manual')
+      runController?.abort(new Error('Left the Packs page'))
     existing?.remove()
     return
   }
@@ -506,19 +742,52 @@ function ensureAutoPanel(): void {
   const host = document.createElement('div')
   host.dataset.wmToolboxPanel = '1'
   host.style.position = 'fixed'
-  host.style.bottom = '0'
-  host.style.right = '0'
+  host.style.bottom = '16px'
+  host.style.right = '16px'
   host.style.zIndex = '2147483647'
   const panel = document.createElement('section')
-  panel.setAttribute('aria-label', 'Automatic pack opening')
-  panel.className =
-    'wm:fixed wm:bottom-4 wm:right-4 wm:z-[2147483647] wm:w-72 wm:rounded-xl wm:bg-slate-950 wm:p-4 wm:text-white wm:shadow-2xl'
+  panel.setAttribute('aria-label', 'WikiMasters Toolbox pack controls')
+  panel.className = 'wm-panel'
 
+  const header = document.createElement('div')
+  header.className = 'wm-panel-header'
   const title = document.createElement('h2')
-  title.className = 'wm:mb-2 wm:text-base wm:font-bold'
+  title.className = 'wm-panel-title'
   title.textContent = 'WikiMasters Toolbox'
+  const mark = document.createElement('span')
+  mark.className = 'wm-panel-mark'
+  mark.textContent = 'Packs'
+  const disclosure = document.createElement('button')
+  disclosure.type = 'button'
+  disclosure.className = 'wm-panel-disclosure'
+  disclosure.setAttribute('aria-label', 'Show Toolbox controls')
+  disclosure.setAttribute('aria-expanded', 'false')
+  disclosure.textContent = 'Show'
+  disclosure.addEventListener('click', () => {
+    const expanded = panel.classList.toggle('wm-panel-open')
+    disclosure.setAttribute(
+      'aria-label',
+      `${expanded ? 'Hide' : 'Show'} Toolbox controls`,
+    )
+    disclosure.setAttribute('aria-expanded', String(expanded))
+    disclosure.textContent = expanded ? 'Hide' : 'Show'
+  })
+  header.append(title, mark, disclosure)
+  const openAllButton = document.createElement('button')
+  openAllButton.type = 'button'
+  openAllButton.dataset.wmToolboxOpenAll = '1'
+  openAllButton.className = 'wm-primary-button wm-open-all'
+  openAllButton.textContent = 'Open all available packs'
+  openAllButton.addEventListener('click', () => {
+    if (runMode === 'manual') {
+      runController?.abort(new Error('Stopped by user'))
+      return
+    }
+    confirmOpenAll(openAllButton)
+  })
   const toggleLabel = document.createElement('label')
-  toggleLabel.className = 'wm:flex wm:items-center wm:gap-2 wm:text-sm'
+  toggleLabel.className = 'wm-setting-toggle'
+  toggleLabel.style.marginTop = '13px'
   const toggle = document.createElement('input')
   toggle.type = 'checkbox'
   toggle.checked = prefs.enabled
@@ -529,17 +798,21 @@ function ensureAutoPanel(): void {
     if (!prefs.enabled) {
       if (autoTimer) clearTimeout(autoTimer)
       autoTimer = null
-      runController?.abort(new Error('Stopped by user'))
+      if (runMode === 'auto') runController?.abort(new Error('Stopped by user'))
       setStatus('Disabled')
     } else scheduleAuto(true)
   })
+  const toggleTrack = document.createElement('span')
+  toggleTrack.className = 'wm-switch'
+  toggleTrack.setAttribute('aria-hidden', 'true')
   toggleLabel.append(
     toggle,
+    toggleTrack,
     document.createTextNode('Open packs automatically'),
   )
 
   const fields = document.createElement('div')
-  fields.className = 'wm:mt-3 wm:grid wm:grid-cols-2 wm:gap-2'
+  fields.className = 'wm-fields'
   fields.append(
     makeInput('Min. (minutes)', prefs.minMinutes, value => {
       prefs.minMinutes = Math.max(1, Math.min(10080, Math.round(value) || 20))
@@ -561,14 +834,22 @@ function ensureAutoPanel(): void {
   const status = document.createElement('p')
   status.dataset.wmToolboxStatus = '1'
   status.setAttribute('role', 'status')
-  status.className = 'wm:mt-3 wm:text-xs wm:text-slate-300'
+  status.className = 'wm-status'
   status.textContent = statusText
   const note = document.createElement('p')
-  note.className = 'wm:mt-2 wm:text-xs wm:text-slate-400'
-  note.textContent = 'Keep this tab open. Available packs will be consumed.'
-  panel.append(title, toggleLabel, fields, status, note)
+  note.className = 'wm-note'
+  note.textContent = 'Keep this tab open for scheduled opening.'
+  const stats = document.createElement('section')
+  stats.dataset.wmToolboxStats = '1'
+  stats.className = 'wm-stats'
+  const body = document.createElement('div')
+  body.className = 'wm-panel-body'
+  body.append(openAllButton, toggleLabel, fields, status, note, stats)
+  panel.append(header, body)
   createToolboxRoot(host).append(panel)
   document.body.append(host)
+  updateOpenAllButton()
+  renderStats()
 }
 
 function ensureAutoPanelRefresh(): void {
@@ -651,14 +932,24 @@ if (!contentWindow.__wmToolboxContentInstalled) {
   window.addEventListener('wm-toolbox:data', (event: Event) => {
     try {
       const data = JSON.parse((event as CustomEvent<string>).detail) as {
+        kind?: string
         cards?: unknown[]
       }
-      if (Array.isArray(data.cards)) registerCards(data.cards.filter(isCard))
+      if (Array.isArray(data.cards)) {
+        const cards = data.cards.filter(isCard)
+        registerCards(cards)
+        if (data.kind === 'pack') void recordPack(cards)
+      }
     } catch {
       /* Invalid event. */
     }
   })
   window.addEventListener('storage', event => {
+    if (event.key === STATS_KEY) {
+      renderStats()
+      scheduleDailyReset()
+      return
+    }
     if (event.key !== AUTO_KEY) return
     prefs = readPrefs()
     if (!prefs.enabled) {
@@ -689,6 +980,7 @@ if (!contentWindow.__wmToolboxContentInstalled) {
     observer.observe(document.body, { childList: true, subtree: true })
     scheduleRender()
     void hydrateRoute()
+    scheduleDailyReset()
     if (prefs.enabled) scheduleAuto()
   }
   start()

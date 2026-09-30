@@ -1,11 +1,4 @@
-import {
-  copyFile,
-  mkdir,
-  readFile,
-  stat,
-  unlink,
-  writeFile,
-} from 'node:fs/promises'
+import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 
 const root = new URL('../', import.meta.url)
 const dist = new URL('../dist/', import.meta.url)
@@ -41,14 +34,12 @@ for (const script of manifest.content_scripts) {
   }
 }
 
-const css = await readFile(new URL('toolbox.css', dist), 'utf8')
+const css = await readFile(new URL('src/toolbox.css', root), 'utf8')
 const content = await readFile(new URL('content.js', dist), 'utf8')
 await writeFile(
   new URL('content.js', dist),
   `const WM_TOOLBOX_CSS = ${JSON.stringify(css)};\n${content}`,
 )
-await unlink(new URL('toolbox.css', dist))
-
 await mkdir(new URL('icons/', dist), { recursive: true })
 for (const path of Object.values(manifest.icons || {})) {
   if (typeof path !== 'string' || !/^icons\/icon-\d+\.png$/.test(path)) {

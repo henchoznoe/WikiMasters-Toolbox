@@ -8,11 +8,6 @@
     },
     "enabled": true
   },
-  "css": {
-    "parser": {
-      "tailwindDirectives": true
-    }
-  },
   "files": {
     "includes": [
       "src/**/*.ts",

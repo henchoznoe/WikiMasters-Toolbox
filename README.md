@@ -1,11 +1,12 @@
 # WikiMasters Toolbox
 
-A Chrome extension for [WikiMasters](https://www.wiki-masters.com/) focused on two features:
+A Chrome extension for [WikiMasters](https://www.wiki-masters.com/) focused on card prices and packs:
 
 - Average sale prices on cards in the collection, marketplace detail pages, and pack views.
 - Optional automatic opening of available packs at a configurable interval.
+- A manual action to open all available packs and local statistics by card rarity.
 
-The extension is independent of WikiMasters. It uses only the game's own API and stores price cache and automation preferences in the browser. Automatic opening is **off by default** and consumes available packs when enabled.
+The extension is independent of WikiMasters. It uses only the game's own API and stores the price cache, automation preferences, and pack statistics in the browser. Automatic opening is **off by default** and consumes available packs when enabled.
 
 ## Development
 
@@ -19,11 +20,15 @@ pnpm package
 
 Load the `dist/` directory in `chrome://extensions/` after enabling Developer mode. Reload the extension and the WikiMasters tab after each build. The ZIP in `artifacts/` is intended for the Chrome Web Store.
 
-The source lives in `src/`. TypeScript compiles to `dist/network.js` and `dist/content.js`. Tailwind CSS uses the `wm:` prefix and omits Preflight. Its output is embedded in `content.js` and applied only inside the extension's shadow roots, leaving the game's styles untouched. The packaged extension contains the two scripts, icons, and `manifest.json`.
+The source lives in `src/`. TypeScript compiles to `dist/network.js` and `dist/content.js`. The small stylesheet in `src/toolbox.css` is embedded in `content.js` and applied only inside the extension's shadow roots, leaving the game's styles untouched. The packaged extension contains the two scripts, icons, and `manifest.json`.
 
 ## Usage
 
-Average prices appear when supported card data is available on collection, marketplace detail, and pack pages. Prices are cached for 24 hours; temporary errors are cached for one minute. On `/pulls`, the Toolbox panel lets you enable automatic opening and set a minimum and maximum delay in minutes. Keep a WikiMasters tab open for the schedule to run. Only one tab opens packs at a time. Each cycle stops after 100 packs or when the game reports that none remain. Turn the toggle off to stop an active cycle.
+Average prices appear when supported card data is available on collection, marketplace detail, and pack pages. Prices are cached for 24 hours; temporary errors are cached for one minute.
+
+On `/pulls`, **Open all available packs** asks for confirmation, then opens packs one at a time without the game's animations. Use the same button to stop a manual run. The panel also lets you enable automatic opening and set a minimum and maximum delay in minutes. Keep a WikiMasters tab open for the schedule to run. Only one tab opens packs at a time. Each cycle stops after 100 packs or when the game reports that none remain. Run the manual action again if the 100-pack limit is reached with packs still available. Turn the automation toggle off to stop an automatic cycle.
+
+Pack statistics count cards by rarity and packs opened through the game's normal button, the manual Toolbox button, and automatic opening. Counts are stored locally in this browser and start when this version is installed. **Reset counts** clears the counts after confirmation. **Daily reset** is off by default; when enabled, counts reset at the next local midnight, or on the next visit if Chrome was closed. Statistics are shared by WikiMasters accounts using the same browser profile.
 
 ## Releases
 
@@ -40,7 +45,7 @@ Do not commit credentials. The GitHub repository must be public before using its
 
 ## Validation limits
 
-The automated checks validate the build, package, API interception, and mocked pack opening. The extension was also loaded in Chrome and checked on signed-in collection, marketplace detail, and pack pages. Automatic pack opening has been verified on the live game. The game's price requests can fail temporarily during busy periods, so affected cards display “Price unavailable” and retry after one minute.
+The automated checks validate the build, package, API interception, mocked pack opening, and daily statistics reset. The extension was also loaded in Chrome and checked on signed-in collection, marketplace detail, and pack pages. Automatic pack opening has been verified on the live game. The game's price requests can fail temporarily during busy periods, so affected cards display “Price unavailable” and retry after one minute.
 
 ## License
 
