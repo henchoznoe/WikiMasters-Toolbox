@@ -16,6 +16,25 @@ function emit(
   )
 }
 
+function emitAccount(id: string): void {
+  window.dispatchEvent(
+    new CustomEvent('wm-toolbox:data', {
+      detail: JSON.stringify({ kind: 'account', accountId: id }),
+    }),
+  )
+}
+
+function accountIdFromProfileUrl(url: URL): string | null {
+  if (
+    !url.hostname.endsWith('.supabase.co') ||
+    url.pathname !== '/rest/v1/profiles' ||
+    url.searchParams.get('select') !== 'id,is_pro'
+  )
+    return null
+  const match = /^eq\.([0-9a-f-]{36})$/i.exec(url.searchParams.get('id') || '')
+  return match?.[1] ?? null
+}
+
 function mapCard(raw: unknown): NetworkCard | null {
   if (!raw || typeof raw !== 'object') return null
   const entry = raw as Record<string, unknown>
@@ -38,8 +57,14 @@ function mapCard(raw: unknown): NetworkCard | null {
 }
 
 function inspect(url: string, json: unknown): void {
+  const parsedUrl = new URL(url, location.origin)
+  const accountId = accountIdFromProfileUrl(parsedUrl)
+  if (accountId) {
+    emitAccount(accountId)
+    return
+  }
   if (!json || typeof json !== 'object') return
-  const pathname = new URL(url, location.origin).pathname
+  const pathname = parsedUrl.pathname
   const data = json as Record<string, unknown>
   if (pathname === '/api/my-collection' && Array.isArray(data.collection)) {
     emit(
@@ -65,6 +90,7 @@ function inspect(url: string, json: unknown): void {
 function isRelevant(url: string): boolean {
   try {
     const parsed = new URL(url, location.origin)
+    if (accountIdFromProfileUrl(parsed)) return true
     return (
       parsed.origin === location.origin &&
       (parsed.pathname === '/api/my-collection' ||
