@@ -1,12 +1,15 @@
 import {
+  getManualLimit,
   getPrefs,
   getStatus,
   onOpenAllClick,
   setAutoEnabled,
+  setManualLimit,
   setMaxMinutes,
   setMinMinutes,
   updateOpenAllButton,
 } from './packs'
+import { renderRunSummary } from './run-summary'
 import { renderStats } from './stats'
 
 function makeInput(
@@ -32,6 +35,22 @@ export function createPacksBody(): HTMLElement {
   const prefs = getPrefs()
   const body = document.createElement('div')
   body.className = 'wm-panel-body'
+  const limitLabel = document.createElement('label')
+  limitLabel.className = 'wm-field wm-manual-limit'
+  const limitCaption = document.createElement('span')
+  limitCaption.textContent = 'Packs per manual run (optional)'
+  const limitInput = document.createElement('input')
+  limitInput.dataset.wmToolboxManualLimit = '1'
+  limitInput.type = 'number'
+  limitInput.min = '1'
+  limitInput.max = '100'
+  limitInput.placeholder = 'All available'
+  limitInput.value = getManualLimit()?.toString() ?? ''
+  limitInput.addEventListener('change', () => {
+    setManualLimit(limitInput.value === '' ? null : Number(limitInput.value))
+    limitInput.value = getManualLimit()?.toString() ?? ''
+  })
+  limitLabel.append(limitCaption, limitInput)
   const openAllButton = document.createElement('button')
   openAllButton.type = 'button'
   openAllButton.dataset.wmToolboxOpenAll = '1'
@@ -50,6 +69,15 @@ export function createPacksBody(): HTMLElement {
   progressMeter.max = 1
   progress.append(progressLabel, progressMeter)
 
+  const runSummary = document.createElement('details')
+  runSummary.dataset.wmToolboxSummary = '1'
+  runSummary.className = 'wm-run-summary'
+  runSummary.hidden = true
+  runSummary.append(
+    document.createElement('summary'),
+    document.createElement('p'),
+  )
+
   const toggleLabel = document.createElement('label')
   toggleLabel.className = 'wm-setting-toggle'
   toggleLabel.style.marginTop = '13px'
@@ -57,7 +85,10 @@ export function createPacksBody(): HTMLElement {
   toggle.dataset.wmToolboxAuto = '1'
   toggle.type = 'checkbox'
   toggle.checked = prefs.enabled
-  toggle.addEventListener('change', () => setAutoEnabled(toggle.checked))
+  toggle.addEventListener('change', () => {
+    setAutoEnabled(toggle.checked)
+    refreshPacksControls()
+  })
   const toggleTrack = document.createElement('span')
   toggleTrack.className = 'wm-switch'
   toggleTrack.setAttribute('aria-hidden', 'true')
@@ -87,15 +118,29 @@ export function createPacksBody(): HTMLElement {
   const note = document.createElement('p')
   note.className = 'wm-note'
   note.textContent = 'Keep this tab open for scheduled opening.'
+  const autoDetails = document.createElement('div')
+  autoDetails.className = 'wm-auto-details'
+  autoDetails.dataset.wmToolboxAutoDetails = '1'
+  autoDetails.hidden = !prefs.enabled
+  autoDetails.append(fields, status, note)
   const stats = document.createElement('section')
   stats.dataset.wmToolboxStats = '1'
   stats.className = 'wm-stats'
-  body.append(openAllButton, progress, toggleLabel, fields, status, note, stats)
+  body.append(
+    limitLabel,
+    openAllButton,
+    progress,
+    runSummary,
+    toggleLabel,
+    autoDetails,
+    stats,
+  )
   return body
 }
 
 export function mountPacksBody(): void {
   updateOpenAllButton()
+  renderRunSummary()
   renderStats()
 }
 
@@ -107,7 +152,15 @@ export function refreshPacksControls(): void {
   const prefs = getPrefs()
   const toggle = root.querySelector<HTMLInputElement>('[data-wm-toolbox-auto]')
   if (toggle) toggle.checked = prefs.enabled
-  const inputs = root.querySelectorAll<HTMLInputElement>('input[type="number"]')
+  const autoDetails = root.querySelector<HTMLElement>(
+    '[data-wm-toolbox-auto-details]',
+  )
+  if (autoDetails) autoDetails.hidden = !prefs.enabled
+  const inputs = root.querySelectorAll<HTMLInputElement>('.wm-fields input')
   if (inputs[0]) inputs[0].value = String(prefs.minMinutes)
   if (inputs[1]) inputs[1].value = String(prefs.maxMinutes)
+  const limit = root.querySelector<HTMLInputElement>(
+    '[data-wm-toolbox-manual-limit]',
+  )
+  if (limit) limit.value = getManualLimit()?.toString() ?? ''
 }

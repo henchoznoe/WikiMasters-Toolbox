@@ -8,11 +8,14 @@ import { build } from 'esbuild'
 const dist = new URL('../dist/', import.meta.url)
 const root = fileURLToPath(new URL('../', import.meta.url))
 
-async function exposeModule(module, names, context) {
+const ACCOUNT_A = '11111111-1111-4111-8111-111111111111'
+const ACCOUNT_B = '22222222-2222-4222-8222-222222222222'
+
+async function exposeModule(module, names, context, extra = '') {
   const imports = names.join(', ')
   const result = await build({
     stdin: {
-      contents: `import { ${imports} } from './src/content/${module}.ts'; Object.assign(globalThis, { ${imports} })`,
+      contents: `import { ${imports} } from './src/content/${module}.ts'; ${extra}; Object.assign(globalThis, { ${imports} })`,
       resolveDir: root,
       sourcefile: 'test-entry.ts',
     },
@@ -138,6 +141,15 @@ test('the network bridge exposes only relevant card data and preserves fetch res
   await window.fetch('https://example.com/api/my-collection')
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal(events.length, 2)
+
+  await window.fetch(
+    `https://example.supabase.co/rest/v1/profiles?select=id%2Cis_pro&id=eq.${ACCOUNT_A}`,
+  )
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.deepEqual(JSON.parse(events[2].detail), {
+    kind: 'account',
+    accountId: ACCOUNT_A,
+  })
 })
 
 test('automatic opening consumes one pack and stops when none remain', async () => {
@@ -194,10 +206,16 @@ test('automatic opening consumes one pack and stops when none remain', async () 
     Map,
     Set,
   }
-  await exposeModule('packs', ['openAvailablePacks'], context)
+  await exposeModule(
+    'packs',
+    ['openAvailablePacks'],
+    context,
+    "import { setAccountId } from './src/content/account.ts'; globalThis.setAccountId = setAccountId",
+  )
+  context.setAccountId(ACCOUNT_A)
   await context.openAvailablePacks(new AbortController().signal)
   assert.equal(requests, 1)
-  const stats = JSON.parse(stored.get('wm_toolbox_pack_stats_v1'))
+  const stats = JSON.parse(stored.get(`wm_toolbox_pack_stats_v2:${ACCOUNT_A}`))
   assert.equal(stats.packs, 1)
   assert.equal(stats.counts.UR, 1)
   assert.equal(stats.counts.Other, 0)
@@ -219,6 +237,11 @@ test('manual bulk opening refreshes the game after every available pack is opene
     localStorage: {
       getItem: key => stored.get(key) || null,
       setItem: (key, value) => stored.set(key, value),
+      removeItem: key => stored.delete(key),
+    },
+    sessionStorage: {
+      getItem: key => stored.get(`session:${key}`) || null,
+      setItem: (key, value) => stored.set(`session:${key}`, value),
     },
     navigator: {
       locks: {
@@ -257,14 +280,90 @@ test('manual bulk opening refreshes the game after every available pack is opene
     Map,
     Set,
   }
-  await exposeModule('packs', ['runPacks'], context)
+  await exposeModule(
+    'packs',
+    ['runPacks'],
+    context,
+    "import { setAccountId } from './src/content/account.ts'; globalThis.setAccountId = setAccountId",
+  )
+  context.setAccountId(ACCOUNT_A)
   await context.runPacks('manual')
   await Promise.resolve()
   assert.equal(requests, 3)
   assert.equal(reloads, 1)
-  const stats = JSON.parse(stored.get('wm_toolbox_pack_stats_v1'))
+  const stats = JSON.parse(stored.get(`wm_toolbox_pack_stats_v2:${ACCOUNT_A}`))
   assert.equal(stats.packs, 3)
   assert.equal(stats.counts.R, 3)
+  const summary = JSON.parse(stored.get('session:wm_toolbox_last_pack_run_v1'))
+  assert.equal(summary.opened, 3)
+  assert.equal(summary.detail, 'No packs remain.')
+})
+
+test('a manual pack limit stops without requesting an extra pack', async () => {
+  const stored = new Map()
+  let requests = 0
+  let reloads = 0
+  const context = {
+    window: { addEventListener() {} },
+    document: { body: null, querySelector: () => null },
+    location: {
+      pathname: '/pulls',
+      reload: () => {
+        reloads += 1
+      },
+    },
+    localStorage: {
+      getItem: key => stored.get(key) || null,
+      setItem: (key, value) => stored.set(key, value),
+      removeItem: key => stored.delete(key),
+    },
+    sessionStorage: {
+      getItem: key => stored.get(`session:${key}`) || null,
+      setItem: (key, value) => stored.set(`session:${key}`, value),
+    },
+    navigator: {
+      locks: {
+        request: (_name, options, callback) =>
+          typeof options === 'function' ? options() : callback({}),
+      },
+    },
+    fetch: async () => {
+      requests += 1
+      return new Response(
+        JSON.stringify({
+          cards: [{ id: `card-${requests}`, rarity: 'C' }],
+          packs_remaining: 5 - requests,
+        }),
+      )
+    },
+    Response,
+    AbortController,
+    setTimeout: callback => {
+      queueMicrotask(callback)
+      return 1
+    },
+    clearTimeout: () => {},
+    Date,
+  }
+  await exposeModule(
+    'packs',
+    ['runPacks', 'setManualLimit'],
+    context,
+    "import { setAccountId } from './src/content/account.ts'; globalThis.setAccountId = setAccountId",
+  )
+  context.setAccountId(ACCOUNT_A)
+  context.setManualLimit(2)
+  await context.runPacks('manual')
+  await Promise.resolve()
+  assert.equal(requests, 2)
+  assert.equal(reloads, 1)
+  assert.equal(
+    JSON.parse(stored.get(`wm_toolbox_pack_stats_v2:${ACCOUNT_A}`)).packs,
+    2,
+  )
+  const summary = JSON.parse(stored.get('session:wm_toolbox_last_pack_run_v1'))
+  assert.equal(summary.opened, 2)
+  assert.equal(summary.detail, 'Reached your 2-pack limit.')
 })
 
 test('scheduled opening uses local 24-hour time', async () => {
@@ -288,8 +387,69 @@ test('scheduled opening uses local 24-hour time', async () => {
   assert.equal(context.formatLocalTime(timestamp), '22h24')
 })
 
+test('two due tabs share one automatic run and one next schedule', async () => {
+  const initial = {
+    enabled: true,
+    minMinutes: 1,
+    maxMinutes: 1,
+    nextAt: Date.now() - 1_000,
+  }
+  const stored = new Map([['wm_toolbox_auto_v1', JSON.stringify(initial)]])
+  const autoWrites = []
+  const held = new Set()
+  const locks = {
+    request: (name, options, callback) => {
+      const action = typeof options === 'function' ? options : callback
+      if (held.has(name)) return Promise.resolve(action(null))
+      held.add(name)
+      return Promise.resolve()
+        .then(() => action({ name }))
+        .finally(() => held.delete(name))
+    },
+  }
+  let requests = 0
+  const makeContext = () => ({
+    window: { addEventListener() {} },
+    document: { querySelector: () => null },
+    location: { pathname: '/', reload: () => {} },
+    localStorage: {
+      getItem: key => stored.get(key) || null,
+      setItem: (key, value) => {
+        stored.set(key, value)
+        if (key === 'wm_toolbox_auto_v1') autoWrites.push(JSON.parse(value))
+      },
+    },
+    sessionStorage: { getItem: () => null, setItem: () => {} },
+    navigator: { locks },
+    fetch: async () => {
+      requests += 1
+      return new Response(
+        JSON.stringify({ cards: [{ rarity: 'R' }], packs_remaining: 0 }),
+      )
+    },
+    Response,
+    AbortController,
+    setTimeout: () => 1,
+    clearTimeout: () => {},
+    Date,
+  })
+  const first = makeContext()
+  const second = makeContext()
+  const extra =
+    "import { setAccountId } from './src/content/account.ts'; globalThis.setAccountId = setAccountId"
+  await exposeModule('packs', ['runPacks'], first, extra)
+  await exposeModule('packs', ['runPacks'], second, extra)
+  first.setAccountId(ACCOUNT_A)
+  second.setAccountId(ACCOUNT_A)
+  await Promise.all([first.runPacks('auto'), second.runPacks('auto')])
+  assert.equal(requests, 1)
+  assert.equal(autoWrites.length, 2)
+  assert.equal(autoWrites[0].nextAt, 0)
+  assert.ok(autoWrites[1].nextAt > Date.now())
+})
+
 test('daily statistics reset after the local date changes', async () => {
-  const key = 'wm_toolbox_pack_stats_v1'
+  const key = `wm_toolbox_pack_stats_v2:${ACCOUNT_A}`
   const stored = new Map([
     [
       key,
@@ -327,11 +487,47 @@ test('daily statistics reset after the local date changes', async () => {
     Set,
   }
   await exposeModule('stats', ['readStats'], context)
-  const stats = context.readStats()
+  const stats = context.readStats(ACCOUNT_A)
   assert.equal(stats.packs, 0)
   assert.equal(stats.counts.R, 0)
   assert.equal(stats.dailyReset, true)
   assert.equal(JSON.parse(stored.get(key)).day, stats.day)
+})
+
+test('pack statistics stay with the account that opened the packs', async () => {
+  const stored = new Map([
+    ['wm_toolbox_pack_stats_v1', '{"packs":7,"dailyReset":true}'],
+  ])
+  const context = {
+    document: { querySelector: () => null },
+    localStorage: {
+      getItem: key => stored.get(key) || null,
+      setItem: (key, value) => stored.set(key, value),
+    },
+    navigator: { locks: null },
+    setTimeout: () => 1,
+    clearTimeout: () => {},
+    Date,
+  }
+  await exposeModule(
+    'stats',
+    ['readStats', 'recordPack'],
+    context,
+    "import { setAccountId } from './src/content/account.ts'; globalThis.setAccountId = setAccountId",
+  )
+  context.setAccountId(ACCOUNT_A)
+  assert.equal(context.readStats().dailyReset, true)
+  await context.recordPack([{ rarity: 'R' }])
+  context.setAccountId(ACCOUNT_B)
+  assert.equal(context.readStats().packs, 0)
+  await context.recordPack([{ rarity: 'C' }])
+  context.setAccountId(ACCOUNT_A)
+  assert.equal(context.readStats().counts.R, 1)
+  assert.equal(context.readStats().counts.C, 0)
+  assert.equal(
+    stored.get('wm_toolbox_pack_stats_v1'),
+    '{"packs":7,"dailyReset":true}',
+  )
 })
 
 test('temporary game rate limits pause and retry pack opening', async () => {

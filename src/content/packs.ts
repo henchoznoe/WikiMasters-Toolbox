@@ -1,3 +1,5 @@
+import { getAccountId } from './account'
+import { saveRunSummary } from './run-summary'
 import { recordPack } from './stats'
 
 type AutoPrefs = {
@@ -17,7 +19,10 @@ type PackResponse = {
 }
 
 export const AUTO_KEY = 'wm_toolbox_auto_v1'
+export const MANUAL_LIMIT_KEY = 'wm_toolbox_manual_limit_v1'
 const MAX_PACKS_PER_CYCLE = 100
+const OPEN_LOCK = 'wm-toolbox-auto-open'
+const AUTO_RETRY_MS = 5_000
 const DEFAULT_PREFS: AutoPrefs = {
   enabled: false,
   minMinutes: 20,
@@ -31,6 +36,50 @@ let runMode: 'manual' | 'auto' | null = null
 let statusText = 'Disabled'
 let openedThisCycle = 0
 let confirmationTimer: ReturnType<typeof setTimeout> | null = null
+let scheduleClaimPending = false
+let manualLimit = readManualLimit()
+
+type OpenResult = {
+  opened: number
+  remaining: number | null
+  reason: 'empty' | 'limit' | 'safety-cap'
+}
+
+function readManualLimit(): number | null {
+  try {
+    const raw = localStorage.getItem(MANUAL_LIMIT_KEY)
+    if (!raw) return null
+    const value = Number(raw)
+    return Number.isInteger(value) && value >= 1 && value <= MAX_PACKS_PER_CYCLE
+      ? value
+      : null
+  } catch {
+    return null
+  }
+}
+
+export function getManualLimit(): number | null {
+  return manualLimit
+}
+
+export function setManualLimit(value: number | null): void {
+  manualLimit =
+    value === null || !Number.isFinite(value)
+      ? null
+      : Math.max(1, Math.min(MAX_PACKS_PER_CYCLE, Math.round(value)))
+  try {
+    if (manualLimit === null) localStorage.removeItem(MANUAL_LIMIT_KEY)
+    else localStorage.setItem(MANUAL_LIMIT_KEY, String(manualLimit))
+  } catch {
+    /* Storage unavailable. */
+  }
+  clearOpenAllConfirmation()
+}
+
+export function syncManualLimitFromStorage(): void {
+  manualLimit = readManualLimit()
+  clearOpenAllConfirmation()
+}
 
 function readPrefs(): AutoPrefs {
   try {
@@ -48,7 +97,7 @@ function readPrefs(): AutoPrefs {
       enabled: parsed.enabled === true,
       minMinutes,
       maxMinutes,
-      nextAt: Number(parsed.nextAt) || 0,
+      nextAt: Math.max(0, Number(parsed.nextAt) || 0),
     }
   } catch {
     return { ...DEFAULT_PREFS }
@@ -65,21 +114,22 @@ export function getStatus(): string {
 
 export function setAutoEnabled(enabled: boolean): void {
   prefs.enabled = enabled
-  prefs.nextAt = 0
+  prefs.nextAt = enabled ? Date.now() + randomDelay() : 0
   writePrefs()
   if (!enabled) {
     if (autoTimer) clearTimeout(autoTimer)
     autoTimer = null
     if (runMode === 'auto') runController?.abort(new Error('Stopped by user'))
     setStatus('Disabled')
-  } else scheduleAuto(true)
+  } else scheduleAuto()
 }
 
 export function setMinMinutes(value: number): void {
   prefs.minMinutes = Math.max(1, Math.min(10080, Math.round(value) || 20))
   prefs.maxMinutes = Math.max(prefs.maxMinutes, prefs.minMinutes)
+  if (prefs.enabled) prefs.nextAt = Date.now() + randomDelay()
   writePrefs()
-  if (prefs.enabled) scheduleAuto(true)
+  if (prefs.enabled) scheduleAuto()
 }
 
 export function setMaxMinutes(value: number): void {
@@ -87,8 +137,9 @@ export function setMaxMinutes(value: number): void {
     prefs.minMinutes,
     Math.min(10080, Math.round(value) || 100),
   )
+  if (prefs.enabled) prefs.nextAt = Date.now() + randomDelay()
   writePrefs()
-  if (prefs.enabled) scheduleAuto(true)
+  if (prefs.enabled) scheduleAuto()
 }
 
 export function syncPrefsFromStorage(): void {
@@ -96,7 +147,8 @@ export function syncPrefsFromStorage(): void {
   if (!prefs.enabled) {
     if (autoTimer) clearTimeout(autoTimer)
     autoTimer = null
-    runController?.abort(new Error('Stopped from another tab'))
+    if (runMode === 'auto')
+      runController?.abort(new Error('Stopped from another tab'))
     setStatus('Disabled')
   } else scheduleAuto()
 }
@@ -149,16 +201,56 @@ function setStatus(value: string): void {
   if (status) status.textContent = statusText
 }
 
-export function scheduleAuto(reset = false): void {
+function schedulePassiveRetry(): void {
+  if (autoTimer) clearTimeout(autoTimer)
+  autoTimer = setTimeout(() => {
+    autoTimer = null
+    scheduleAuto()
+  }, AUTO_RETRY_MS)
+}
+
+async function claimMissingSchedule(): Promise<void> {
+  if (scheduleClaimPending) return
+  if (!navigator.locks) {
+    setStatus('Cross-tab lock unavailable')
+    return
+  }
+  scheduleClaimPending = true
+  try {
+    await navigator.locks.request(OPEN_LOCK, { ifAvailable: true }, lock => {
+      if (!lock) {
+        setStatus('Another tab is opening packs')
+        schedulePassiveRetry()
+        return
+      }
+      prefs = readPrefs()
+      if (!prefs.enabled) return
+      if (prefs.nextAt === 0) {
+        prefs.nextAt = Date.now() + randomDelay()
+        writePrefs()
+      }
+      scheduleAuto()
+    })
+  } finally {
+    scheduleClaimPending = false
+  }
+}
+
+export function scheduleAuto(): void {
   if (autoTimer) clearTimeout(autoTimer)
   autoTimer = null
+  prefs = readPrefs()
   if (!prefs.enabled || runController) return
-  if (reset || prefs.nextAt <= Date.now()) {
-    prefs.nextAt = Date.now() + randomDelay()
-    writePrefs()
+  if (prefs.nextAt === 0) {
+    void claimMissingSchedule()
+    return
   }
   const remaining = Math.max(1_000, prefs.nextAt - Date.now())
-  setStatus(`Next opening around ${formatLocalTime(prefs.nextAt)}`)
+  setStatus(
+    prefs.nextAt <= Date.now()
+      ? 'Scheduled opening is due…'
+      : `Next opening around ${formatLocalTime(prefs.nextAt)}`,
+  )
   autoTimer = setTimeout(() => {
     autoTimer = null
     void runAuto()
@@ -222,7 +314,11 @@ export async function openOnePack(signal: AbortSignal): Promise<PackResponse> {
       continue
     }
     if (!response.ok)
-      throw new Error(json.error || json.message || `HTTP ${response.status}`)
+      throw new Error(
+        json.rate_limit_daily
+          ? 'Daily pack limit reached'
+          : `The game returned HTTP ${response.status}`,
+      )
     return json
   }
   throw new Error('Opening stopped by the game rate limit')
@@ -230,32 +326,46 @@ export async function openOnePack(signal: AbortSignal): Promise<PackResponse> {
 
 export async function openAvailablePacks(
   signal: AbortSignal,
-): Promise<boolean> {
+  maxPacks = MAX_PACKS_PER_CYCLE,
+  expectedAccountId?: string,
+): Promise<OpenResult> {
   openedThisCycle = 0
-  let remaining = Number.NaN
+  let remaining: number | null = null
   updateProgress(0, null)
-  for (let index = 0; index < MAX_PACKS_PER_CYCLE; index += 1) {
+  const limit = Math.max(1, Math.min(MAX_PACKS_PER_CYCLE, maxPacks))
+  for (let index = 0; index < limit; index += 1) {
     if (signal.aborted) throw signal.reason
+    if (expectedAccountId && getAccountId() !== expectedAccountId)
+      throw new Error('WikiMasters account changed during the run')
     setStatus(`Opening pack ${index + 1}…`)
     const response = await openOnePack(signal)
     if (!Array.isArray(response.cards) || response.cards.length === 0) {
-      if (response.packs_remaining === 0) break
+      if (response.packs_remaining === 0)
+        return { opened: openedThisCycle, remaining: 0, reason: 'empty' }
       throw new Error('The game returned a pack without cards')
     }
     openedThisCycle += 1
-    remaining = Number(response.packs_remaining)
-    await recordPack(response.cards)
+    const reportedRemaining = Number(response.packs_remaining)
+    remaining = Number.isFinite(reportedRemaining)
+      ? Math.max(0, reportedRemaining)
+      : null
+    await recordPack(response.cards, expectedAccountId)
     updateProgress(
       openedThisCycle,
-      Number.isFinite(remaining)
-        ? openedThisCycle + Math.max(0, remaining)
-        : null,
+      remaining === null ? null : Math.min(limit, openedThisCycle + remaining),
     )
     updateOpenAllButton()
-    if (Number.isFinite(remaining) && remaining <= 0) break
+    if (remaining === 0)
+      return { opened: openedThisCycle, remaining, reason: 'empty' }
+    if (openedThisCycle === limit)
+      return {
+        opened: openedThisCycle,
+        remaining,
+        reason: limit === MAX_PACKS_PER_CYCLE ? 'safety-cap' : 'limit',
+      }
     await wait(500 + Math.round(Math.random() * 1_500), signal)
   }
-  return openedThisCycle === MAX_PACKS_PER_CYCLE && remaining > 0
+  return { opened: openedThisCycle, remaining, reason: 'empty' }
 }
 
 export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
@@ -263,20 +373,26 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
   clearOpenAllConfirmation()
   if (!navigator.locks) {
     setStatus('Cross-tab lock unavailable')
-    if (mode === 'auto') scheduleAuto(true)
     return
   }
   await navigator.locks.request(
-    'wm-toolbox-auto-open',
+    OPEN_LOCK,
     { ifAvailable: true },
     async lock => {
       if (!lock) {
         setStatus('Another tab is opening packs')
-        if (mode === 'auto') scheduleAuto(true)
+        if (mode === 'auto') schedulePassiveRetry()
         return
       }
       prefs = readPrefs()
-      if (mode === 'auto' && !prefs.enabled) return
+      if (mode === 'auto') {
+        if (!prefs.enabled) return
+        if (prefs.nextAt === 0 || prefs.nextAt > Date.now()) {
+          scheduleAuto()
+          return
+        }
+      }
+      const accountId = getAccountId()
       runController = new AbortController()
       runMode = mode
       if (mode === 'auto') {
@@ -284,27 +400,59 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
         writePrefs()
       }
       updateOpenAllButton()
+      const limit =
+        mode === 'manual'
+          ? (manualLimit ?? MAX_PACKS_PER_CYCLE)
+          : MAX_PACKS_PER_CYCLE
+      let detail = ''
       try {
-        const capped = await openAvailablePacks(runController.signal)
+        const result = await openAvailablePacks(
+          runController.signal,
+          limit,
+          accountId ?? undefined,
+        )
+        detail =
+          result.reason === 'empty'
+            ? result.opened === 0
+              ? 'No packs were available.'
+              : 'No packs remain.'
+            : result.reason === 'limit'
+              ? `Reached your ${limit}-pack limit.`
+              : `Stopped at the ${MAX_PACKS_PER_CYCLE}-pack safety limit.`
         setStatus(
-          capped
-            ? `Stopped after ${MAX_PACKS_PER_CYCLE} packs. Run again to continue.`
-            : `${openedThisCycle} pack${openedThisCycle === 1 ? '' : 's'} opened`,
+          `${openedThisCycle} pack${openedThisCycle === 1 ? '' : 's'} opened`,
         )
       } catch (error) {
-        setStatus(
-          runController.signal.aborted
-            ? 'Opening stopped'
-            : `Failed: ${error instanceof Error ? error.message : String(error)}`,
-        )
+        detail = runController.signal.aborted
+          ? runController.signal.reason instanceof Error
+            ? `${runController.signal.reason.message}.`
+            : 'Opening stopped.'
+          : error instanceof Error
+            ? `Failed: ${error.message}.`
+            : 'Failed: the game could not open the next pack.'
+        setStatus(detail)
       } finally {
         const shouldRefresh =
           openedThisCycle > 0 && /^\/pulls(\/|$)/.test(location.pathname)
+        const summaryAccountId = accountId ?? getAccountId()
+        if (summaryAccountId)
+          saveRunSummary({
+            accountId: summaryAccountId,
+            mode,
+            opened: openedThisCycle,
+            detail,
+            finishedAt: Date.now(),
+          })
+        hideProgress()
         runController = null
         runMode = null
         updateOpenAllButton()
         prefs = readPrefs()
-        if (prefs.enabled) scheduleAuto(true)
+        if (prefs.enabled) {
+          prefs.nextAt = Date.now() + randomDelay()
+          writePrefs()
+          scheduleAuto()
+        }
         if (shouldRefresh) setTimeout(() => location.reload(), 800)
       }
     },
@@ -328,8 +476,12 @@ export function updateOpenAllButton(): void {
       : runMode === 'auto'
         ? 'Opening automatically…'
         : confirmationTimer
-          ? 'Confirm opening all packs'
-          : 'Open all available packs'
+          ? manualLimit === null
+            ? 'Confirm opening all packs'
+            : `Confirm opening up to ${manualLimit} ${manualLimit === 1 ? 'pack' : 'packs'}`
+          : manualLimit === null
+            ? 'Open all available packs'
+            : `Open up to ${manualLimit} ${manualLimit === 1 ? 'pack' : 'packs'}`
 }
 
 export function clearOpenAllConfirmation(): void {
@@ -355,4 +507,11 @@ function updateProgress(opened: number, total: number | null): void {
     meter.value = opened
     label.textContent = `${opened} of ${total} packs opened`
   }
+}
+
+function hideProgress(): void {
+  const progress = document
+    .querySelector<HTMLElement>('[data-wm-toolbox-panel]')
+    ?.shadowRoot?.querySelector<HTMLElement>('[data-wm-toolbox-progress]')
+  if (progress) progress.hidden = true
 }

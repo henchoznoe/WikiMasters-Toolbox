@@ -1,7 +1,10 @@
+import { getAccountId, setAccountId } from './content/account'
 import {
   AUTO_KEY,
   getPrefs,
+  MANUAL_LIMIT_KEY,
   scheduleAuto,
+  syncManualLimitFromStorage,
   syncPrefsFromStorage,
 } from './content/packs'
 import { refreshPacksControls } from './content/packs-panel'
@@ -14,11 +17,12 @@ import {
   setPriceRenderCallback,
 } from './content/prices'
 import { toolboxPages } from './content/routes'
+import { renderRunSummary } from './content/run-summary'
 import { isCard } from './content/shared'
 import {
   recordPack,
   renderStats,
-  STATS_KEY,
+  STATS_PREFIX,
   scheduleDailyReset,
 } from './content/stats'
 
@@ -45,6 +49,15 @@ if (!contentWindow.__wmToolboxContentInstalled) {
       const data = JSON.parse((event as CustomEvent<string>).detail) as {
         kind?: string
         cards?: unknown[]
+        accountId?: unknown
+      }
+      if (data.kind === 'account') {
+        if (setAccountId(data.accountId)) {
+          renderStats()
+          renderRunSummary()
+          scheduleDailyReset()
+        }
+        return
       }
       if (Array.isArray(data.cards)) {
         const cards = data.cards.filter(isCard)
@@ -56,9 +69,14 @@ if (!contentWindow.__wmToolboxContentInstalled) {
     }
   })
   window.addEventListener('storage', event => {
-    if (event.key === STATS_KEY) {
+    if (event.key === `${STATS_PREFIX}${getAccountId()}`) {
       renderStats()
       scheduleDailyReset()
+      return
+    }
+    if (event.key === MANUAL_LIMIT_KEY) {
+      syncManualLimitFromStorage()
+      refreshPacksControls()
       return
     }
     if (event.key !== AUTO_KEY) return

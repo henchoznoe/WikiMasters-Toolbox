@@ -1,3 +1,5 @@
+import { getAccountId } from './account'
+
 type PackStats = {
   day: string
   dailyReset: boolean
@@ -5,8 +7,13 @@ type PackStats = {
   counts: Record<string, number>
 }
 
-export const STATS_KEY = 'wm_toolbox_pack_stats_v1'
+export const STATS_PREFIX = 'wm_toolbox_pack_stats_v2:'
+const LEGACY_STATS_KEY = 'wm_toolbox_pack_stats_v1'
 const RARITIES = ['L', 'UR', 'SR', 'R', 'PC', 'C', 'Other'] as const
+
+export function statsStorageKey(accountId: string): string {
+  return `${STATS_PREFIX}${accountId}`
+}
 
 function localDay(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -21,18 +28,30 @@ function emptyStats(dailyReset = false): PackStats {
   }
 }
 
-function writeStats(stats: PackStats): void {
+function legacyDailyReset(): boolean {
   try {
-    localStorage.setItem(STATS_KEY, JSON.stringify(stats))
+    const raw = localStorage.getItem(LEGACY_STATS_KEY)
+    return raw
+      ? (JSON.parse(raw) as Partial<PackStats>).dailyReset === true
+      : false
+  } catch {
+    return false
+  }
+}
+
+function writeStats(accountId: string, stats: PackStats): void {
+  try {
+    localStorage.setItem(statsStorageKey(accountId), JSON.stringify(stats))
   } catch {
     /* Storage unavailable. */
   }
 }
 
-export function readStats(): PackStats {
+export function readStats(accountId = getAccountId()): PackStats {
+  if (!accountId) return emptyStats()
   try {
-    const raw = localStorage.getItem(STATS_KEY)
-    if (!raw) return emptyStats()
+    const raw = localStorage.getItem(statsStorageKey(accountId))
+    if (!raw) return emptyStats(legacyDailyReset())
     const parsed = JSON.parse(raw) as Partial<PackStats>
     const stats: PackStats = {
       day: typeof parsed.day === 'string' ? parsed.day : localDay(),
@@ -47,7 +66,7 @@ export function readStats(): PackStats {
     }
     if (stats.dailyReset && stats.day !== localDay()) {
       const reset = emptyStats(true)
-      writeStats(reset)
+      writeStats(accountId, reset)
       return reset
     }
     return stats
@@ -58,18 +77,23 @@ export function readStats(): PackStats {
 
 async function updateStats(
   change: (stats: PackStats) => PackStats,
+  accountId = getAccountId(),
 ): Promise<void> {
+  if (!accountId) return
   const update = (): void => {
-    writeStats(change(readStats()))
+    writeStats(accountId, change(readStats(accountId)))
     renderStats()
     scheduleDailyReset()
   }
   if (navigator.locks)
-    await navigator.locks.request('wm-toolbox-pack-stats', update)
+    await navigator.locks.request(`wm-toolbox-pack-stats:${accountId}`, update)
   else update()
 }
 
-export async function recordPack(cards: unknown[]): Promise<void> {
+export async function recordPack(
+  cards: unknown[],
+  accountId = getAccountId(),
+): Promise<void> {
   if (!cards.length) return
   await updateStats(stats => {
     stats.packs += 1
@@ -86,7 +110,7 @@ export async function recordPack(cards: unknown[]): Promise<void> {
       stats.counts[key] += 1
     }
     return stats
-  })
+  }, accountId)
 }
 
 let dailyResetTimer: ReturnType<typeof setTimeout> | null = null
@@ -94,12 +118,13 @@ let dailyResetTimer: ReturnType<typeof setTimeout> | null = null
 export function scheduleDailyReset(): void {
   if (dailyResetTimer) clearTimeout(dailyResetTimer)
   dailyResetTimer = null
-  if (!readStats().dailyReset) return
+  const accountId = getAccountId()
+  if (!accountId || !readStats(accountId).dailyReset) return
   const now = new Date()
   const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
   dailyResetTimer = setTimeout(
     () => {
-      readStats()
+      readStats(accountId)
       renderStats()
       scheduleDailyReset()
     },
@@ -112,6 +137,13 @@ export function renderStats(): void {
     .querySelector<HTMLElement>('[data-wm-toolbox-panel]')
     ?.shadowRoot?.querySelector<HTMLElement>('[data-wm-toolbox-stats]')
   if (!container) return
+  if (!getAccountId()) {
+    const message = document.createElement('p')
+    message.className = 'wm-stats-pending'
+    message.textContent = 'Waiting for your WikiMasters account…'
+    container.replaceChildren(message)
+    return
+  }
   const stats = readStats()
   const total = Object.values(stats.counts).reduce(
     (sum, count) => sum + count,

@@ -4,7 +4,7 @@ A Chrome extension for [WikiMasters](https://www.wiki-masters.com/) focused on c
 
 - Average sale prices on cards in the collection, marketplace detail pages, and pack views.
 - Optional automatic opening of available packs at a configurable interval.
-- A manual action to open all available packs and local statistics by card rarity.
+- A manual action to open all available packs or a chosen number, plus local statistics by card rarity.
 
 The extension is independent of WikiMasters. It uses only the game's own API and stores the price cache, automation preferences, and pack statistics in the browser. Automatic opening is **off by default** and consumes available packs when enabled.
 
@@ -28,11 +28,11 @@ The source lives in `src/`. TypeScript checks every module, then esbuild bundles
 
 Average prices appear when supported card data is available on collection, marketplace detail, and pack pages. Prices are cached for 24 hours; temporary errors are cached for one minute.
 
-On `/pulls`, click **Open all available packs** twice within eight seconds to confirm. The extension opens packs one at a time without the game's animations and shows progress as it goes. Use the same button to stop a manual run. The page reloads after a run that opened at least one pack so the game's remaining-pack counter stays current. The panel can be shown or hidden at any screen size, and your choice is saved in this browser.
+On `/pulls`, leave **Packs per manual run** empty to open all available packs (up to 100), or enter a limit from 1 to 100. Click the opening button twice within eight seconds to confirm. The extension opens packs one at a time without the game's animations and shows progress as it goes. Use the same button to stop a manual run. After a run, a compact **Last run** line appears in the Toolbox; expand it to see the stop or error reason and local time. It remains available after the page reloads. The page reloads after a run that opened at least one pack so the game's own remaining-pack counter stays current. The panel can be shown or hidden at any screen size, and your choice is saved in this browser.
 
-The panel also lets you enable automatic opening and set a minimum and maximum delay in minutes. The next opening time uses the browser's local time in 24-hour format. Keep a WikiMasters tab open for the schedule to run. Only one tab opens packs at a time. Each cycle stops after 100 packs or when the game reports that none remain. Run the manual action again if the 100-pack limit is reached with packs still available. Turn the automation toggle off to stop an automatic cycle.
+The panel also lets you enable automatic opening and set a minimum and maximum delay in minutes. Those settings and the next opening time appear only while automation is enabled. The time uses the browser's local 24-hour format. Keep a WikiMasters tab open for the schedule to run. Tabs share one scheduled time, and only one tab opens packs at a time. Each automatic cycle stops after 100 packs or when the game reports that none remain. Run the manual action again if the 100-pack limit is reached with packs still available. Turn the automation toggle off to stop an automatic cycle.
 
-Pack statistics count cards by rarity and packs opened through the game's normal button, the manual Toolbox button, and automatic opening. Counts are stored locally in this browser and start when this version is installed. **Reset counts** clears the counts after confirmation. **Daily reset** is off by default; when enabled, counts reset at the next local midnight, or on the next visit if Chrome was closed. Statistics are shared by WikiMasters accounts using the same browser profile.
+Pack statistics count cards by rarity and packs opened through the game's normal button, the manual Toolbox button, and automatic opening. Counts are stored locally in this browser for the detected WikiMasters account. Existing shared counts from earlier Toolbox versions remain in browser storage but are not assigned to any account, since they may include packs from different accounts. New account-specific totals therefore start at zero. The previous daily-reset preference is retained as the initial setting. **Reset counts** clears the current account's counts after confirmation. **Daily reset** resets those counts at the next local midnight, or on the next visit if Chrome was closed.
 
 ## Releases
 
@@ -49,7 +49,7 @@ Do not commit credentials. The GitHub repository must be public before using its
 
 ## Validation limits
 
-The automated checks validate the build, package, API interception, mocked pack opening, and daily statistics reset. The extension was also loaded in Chrome and checked on signed-in collection, marketplace detail, and pack pages. Automatic pack opening has been verified on the live game. The game's price requests can fail temporarily during busy periods, so affected cards display “Price unavailable” and retry after one minute.
+The automated checks validate the build, package, API interception, manual limits, account-specific statistics, shared scheduling, mocked pack opening, and daily statistics reset. The extension was also loaded in Chrome and checked on signed-in collection, marketplace detail, and pack pages. Automatic opening and a one-pack manual run have been verified on the live game. The manual run updated account-specific statistics and kept its summary after the game's pack counter refreshed from 5 to 4 on reload. The game's price requests can fail temporarily during busy periods, so affected cards display “Price unavailable” and retry after one minute. A supported way to refresh the game's on-page pack counter without reloading was not found, so the extension retains the page reload after opening packs.
 
 ## License
 

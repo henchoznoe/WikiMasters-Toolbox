@@ -128,6 +128,10 @@
   width: 100%;
 }
 
+.wm-manual-limit {
+  margin-bottom: 10px;
+}
+
 .wm-open-all-confirm {
   border-color: #e9b96a;
   background: #c9964e;
@@ -173,6 +177,31 @@
   background: #31d39b;
 }
 
+.wm-run-summary {
+  margin-top: 11px;
+  border: 1px solid #315044;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #192a22;
+  color: #cfebdb;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.wm-run-summary[hidden] {
+  display: none;
+}
+
+.wm-run-summary summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.wm-run-summary p {
+  margin-top: 6px;
+  color: #aec6b7;
+}
+
 .wm-quiet-button {
   border: 1px solid #33443a;
   background: #1a2420;
@@ -193,6 +222,10 @@
   cursor: pointer;
   font-size: 12px;
   color: #e2eae5;
+}
+
+.wm-auto-details[hidden] {
+  display: none;
 }
 
 .wm-setting-toggle input {
@@ -266,6 +299,10 @@
   outline-offset: 2px;
 }
 
+.wm-manual-limit input {
+  width: 100%;
+}
+
 .wm-status {
   margin-top: 12px !important;
   color: #71d6a9;
@@ -284,6 +321,11 @@
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid #2a3930;
+}
+
+.wm-stats-pending {
+  color: #9bab9f;
+  font-size: 11px;
 }
 
 .wm-stats-head {
