@@ -9,7 +9,7 @@ import {
   setMinMinutes,
   updateOpenAllButton,
 } from './packs'
-import { renderRunSummary } from './run-summary'
+import { renderRunSummary, setRunSummaryExpanded } from './run-summary'
 import { renderStats } from './stats'
 
 function makeInput(
@@ -76,6 +76,9 @@ export function createPacksBody(): HTMLElement {
   runSummary.append(
     document.createElement('summary'),
     document.createElement('p'),
+  )
+  runSummary.addEventListener('toggle', () =>
+    setRunSummaryExpanded(runSummary.open),
   )
 
   const toggleLabel = document.createElement('label')

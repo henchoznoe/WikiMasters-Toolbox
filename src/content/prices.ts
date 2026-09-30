@@ -3,6 +3,7 @@ import { type Card, createToolboxRoot, normalizeTitle } from './shared'
 type PriceEntry = {
   fetchedAt: number
   ok: boolean
+  notFound?: boolean
   averages: Record<string, number>
 }
 
@@ -61,10 +62,35 @@ function chosenAverage(
   entry: PriceEntry,
   rarity: string | null,
 ): number | null {
-  if (rarity && Number.isFinite(entry.averages[rarity]))
-    return entry.averages[rarity]
+  if (rarity)
+    return Number.isFinite(entry.averages[rarity])
+      ? entry.averages[rarity]
+      : null
   const values = Object.values(entry.averages).filter(Number.isFinite)
   return values.length === 1 ? values[0] : null
+}
+
+export type PriceQuote =
+  | { status: 'loading' }
+  | { status: 'unavailable'; fetchedAt: number }
+  | { status: 'no-sales'; fetchedAt: number }
+  | { status: 'not-found'; fetchedAt: number }
+  | { status: 'available'; average: number; fetchedAt: number }
+
+export function readPriceQuote(id: string, rarity: string | null): PriceQuote {
+  const cached = readCachedPrice(id)
+  if (!cached) return { status: 'loading' }
+  if (cached.notFound)
+    return { status: 'not-found', fetchedAt: cached.fetchedAt }
+  if (!cached.ok) return { status: 'unavailable', fetchedAt: cached.fetchedAt }
+  const average = chosenAverage(cached, rarity)
+  return average === null
+    ? { status: 'no-sales', fetchedAt: cached.fetchedAt }
+    : { status: 'available', average, fetchedAt: cached.fetchedAt }
+}
+
+export function requestPriceQuote(id: string): void {
+  enqueuePrice(id)
 }
 
 function rarityFromElement(card: Element): string | null {
@@ -115,11 +141,15 @@ function renderBadge(card: HTMLElement, id: string): void {
         )
   const text = cached.ok
     ? `Avg. ${formatted}${average === null ? '' : ' W'}`
-    : 'Price unavailable'
+    : cached.notFound
+      ? 'No market price'
+      : 'Price unavailable'
   if (badge.textContent !== text) badge.textContent = text
   badge.title = cached.ok
     ? 'Average sale price, cached for 24 hours'
-    : 'Temporary error; retry in one minute'
+    : cached.notFound
+      ? 'No market price found; retry in one minute'
+      : 'Temporary error; retry in one minute'
 }
 
 const visiblePriceObserver = new IntersectionObserver(
@@ -169,17 +199,21 @@ async function loadPrice(id: string): Promise<void> {
         signal: AbortSignal.timeout(12_000),
       },
     )
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const json = (await response.json()) as {
-      summary?: Record<string, { average?: unknown }>
+    if (response.status === 404) {
+      entry = { fetchedAt: Date.now(), ok: false, notFound: true, averages: {} }
+    } else {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const json = (await response.json()) as {
+        summary?: Record<string, { average?: unknown }>
+      }
+      const averages: Record<string, number> = {}
+      for (const [rarity, value] of Object.entries(json.summary || {})) {
+        if (value?.average == null || value.average === '') continue
+        const average = Number(value?.average)
+        if (Number.isFinite(average)) averages[rarity] = average
+      }
+      entry = { fetchedAt: Date.now(), ok: true, averages }
     }
-    const averages: Record<string, number> = {}
-    for (const [rarity, value] of Object.entries(json.summary || {})) {
-      if (value?.average == null || value.average === '') continue
-      const average = Number(value?.average)
-      if (Number.isFinite(average)) averages[rarity] = average
-    }
-    entry = { fetchedAt: Date.now(), ok: true, averages }
   } catch (error) {
     console.debug('[WikiMasters Toolbox] price unavailable', id, error)
     entry = { fetchedAt: Date.now(), ok: false, averages: {} }
@@ -235,7 +269,9 @@ export function renderMarketplace(): void {
   const average = chosenAverage(cached, cardsById.get(id)?.rarity || null)
   const text = cached.ok
     ? `Average price: ${average === null ? '—' : `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(average)} W`}`
-    : 'Average price unavailable'
+    : cached.notFound
+      ? 'No market price'
+      : 'Average price unavailable'
   if (badge.textContent !== text) badge.textContent = text
 }
 

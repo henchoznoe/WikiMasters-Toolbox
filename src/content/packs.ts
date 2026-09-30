@@ -1,5 +1,5 @@
 import { getAccountId } from './account'
-import { saveRunSummary } from './run-summary'
+import { captureRunCards, type RunCard, saveRunSummary } from './run-summary'
 import { recordPack } from './stats'
 
 type AutoPrefs = {
@@ -328,6 +328,7 @@ export async function openAvailablePacks(
   signal: AbortSignal,
   maxPacks = MAX_PACKS_PER_CYCLE,
   expectedAccountId?: string,
+  onPackOpened?: (cards: RunCard[]) => void,
 ): Promise<OpenResult> {
   openedThisCycle = 0
   let remaining: number | null = null
@@ -345,6 +346,7 @@ export async function openAvailablePacks(
       throw new Error('The game returned a pack without cards')
     }
     openedThisCycle += 1
+    onPackOpened?.(captureRunCards(response.cards, openedThisCycle))
     const reportedRemaining = Number(response.packs_remaining)
     remaining = Number.isFinite(reportedRemaining)
       ? Math.max(0, reportedRemaining)
@@ -404,12 +406,15 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
         mode === 'manual'
           ? (manualLimit ?? MAX_PACKS_PER_CYCLE)
           : MAX_PACKS_PER_CYCLE
+      const openedCards: RunCard[] = []
       let detail = ''
       try {
         const result = await openAvailablePacks(
           runController.signal,
           limit,
           accountId ?? undefined,
+          cards =>
+            openedCards.push(...cards.slice(0, 500 - openedCards.length)),
         )
         detail =
           result.reason === 'empty'
@@ -442,6 +447,8 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
             opened: openedThisCycle,
             detail,
             finishedAt: Date.now(),
+            cards: openedCards,
+            expanded: true,
           })
         hideProgress()
         runController = null
