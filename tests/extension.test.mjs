@@ -38,10 +38,21 @@ test('the network bridge exposes only relevant card data and preserves fetch res
     ],
   }
   const window = {
-    fetch: async () =>
-      new Response(JSON.stringify(responseBody), {
-        headers: { 'content-type': 'application/json' },
-      }),
+    fetch: async url =>
+      new Response(
+        JSON.stringify(
+          url === '/api/packs/open'
+            ? {
+                cards: [
+                  { id: 'card-2', wikipedia_title: 'Another', rarity: 'UR' },
+                ],
+              }
+            : responseBody,
+        ),
+        {
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
     dispatchEvent: event => events.push(event),
   }
   class FakeXHR {
@@ -74,13 +85,21 @@ test('the network bridge exposes only relevant card data and preserves fetch res
     cards: [{ id: 'card-1', title: 'Example', rarity: 'R' }],
   })
 
+  await window.fetch('/api/packs/open')
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.deepEqual(JSON.parse(events[1].detail), {
+    kind: 'pack',
+    cards: [{ id: 'card-2', title: 'Another', rarity: 'UR' }],
+  })
+
   await window.fetch('https://example.com/api/my-collection')
   await new Promise(resolve => setTimeout(resolve, 0))
-  assert.equal(events.length, 1)
+  assert.equal(events.length, 2)
 })
 
 test('automatic opening consumes one pack and stops when none remain', async () => {
   let requests = 0
+  const stored = new Map()
   const context = {
     window: { addEventListener() {} },
     document: {
@@ -90,9 +109,10 @@ test('automatic opening consumes one pack and stops when none remain', async () 
     },
     location: { pathname: '/' },
     localStorage: {
-      getItem: () => null,
-      setItem() {},
+      getItem: key => stored.get(key) || null,
+      setItem: (key, value) => stored.set(key, value),
     },
+    navigator: { locks: null },
     IntersectionObserver: class {
       observe() {}
       unobserve() {}
@@ -109,7 +129,10 @@ test('automatic opening consumes one pack and stops when none remain', async () 
       assert.equal(options.credentials, 'include')
       requests += 1
       return new Response(
-        JSON.stringify({ cards: [{ id: 'card-1' }], packs_remaining: 0 }),
+        JSON.stringify({
+          cards: [{ id: 'card-1', rarity: 'UR' }],
+          packs_remaining: 0,
+        }),
         {
           headers: { 'content-type': 'application/json' },
         },
@@ -135,4 +158,193 @@ test('automatic opening consumes one pack and stops when none remain', async () 
   )
   await context.testOpen(new AbortController().signal)
   assert.equal(requests, 1)
+  const stats = JSON.parse(stored.get('wm_toolbox_pack_stats_v1'))
+  assert.equal(stats.packs, 1)
+  assert.equal(stats.counts.UR, 1)
+  assert.equal(stats.counts.Other, 0)
+})
+
+test('manual bulk opening refreshes the game after every available pack is opened', async () => {
+  const stored = new Map()
+  let requests = 0
+  let reloads = 0
+  const context = {
+    window: { addEventListener() {} },
+    document: { body: null, querySelector: () => null },
+    location: {
+      pathname: '/pulls',
+      reload: () => {
+        reloads += 1
+      },
+    },
+    localStorage: {
+      getItem: key => stored.get(key) || null,
+      setItem: (key, value) => stored.set(key, value),
+    },
+    navigator: {
+      locks: {
+        request: (_name, options, callback) =>
+          typeof options === 'function' ? options() : callback({}),
+      },
+    },
+    IntersectionObserver: class {
+      observe() {}
+    },
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    MutationObserver: class {
+      observe() {}
+    },
+    fetch: async () => {
+      requests += 1
+      return new Response(
+        JSON.stringify({
+          cards: [{ id: `card-${requests}`, rarity: 'R' }],
+          packs_remaining: 3 - requests,
+        }),
+      )
+    },
+    Response,
+    AbortController,
+    AbortSignal,
+    setTimeout: (callback, delay) => {
+      if (delay < 10_000) queueMicrotask(callback)
+      return 1
+    },
+    clearTimeout: () => {},
+    requestAnimationFrame: () => {},
+    Date,
+    Map,
+    Set,
+  }
+  const code = await readFile(new URL('content.js', dist), 'utf8')
+  vm.runInNewContext(`${code}\nglobalThis.testRunPacks = runPacks`, context)
+  await context.testRunPacks('manual')
+  await Promise.resolve()
+  assert.equal(requests, 3)
+  assert.equal(reloads, 1)
+  const stats = JSON.parse(stored.get('wm_toolbox_pack_stats_v1'))
+  assert.equal(stats.packs, 3)
+  assert.equal(stats.counts.R, 3)
+})
+
+test('scheduled opening uses local 24-hour time', async () => {
+  const code = await readFile(new URL('content.js', dist), 'utf8')
+  const context = {
+    window: { addEventListener() {} },
+    document: { body: null },
+    location: { pathname: '/' },
+    localStorage: { getItem: () => null },
+    IntersectionObserver: class {},
+    MutationObserver: class {},
+    requestAnimationFrame: () => {},
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    Date,
+    Map,
+    Set,
+  }
+  vm.runInNewContext(
+    `${code}\nglobalThis.testFormatLocalTime = formatLocalTime`,
+    context,
+  )
+  const timestamp = new Date(2026, 8, 30, 22, 24).getTime()
+  assert.equal(context.testFormatLocalTime(timestamp), '22h24')
+})
+
+test('daily statistics reset after the local date changes', async () => {
+  const key = 'wm_toolbox_pack_stats_v1'
+  const stored = new Map([
+    [
+      key,
+      JSON.stringify({
+        day: '2000-01-01',
+        dailyReset: true,
+        packs: 4,
+        counts: { R: 20 },
+      }),
+    ],
+  ])
+  const context = {
+    window: { addEventListener() {} },
+    document: { body: null, querySelector: () => null },
+    location: { pathname: '/' },
+    localStorage: {
+      getItem: name => stored.get(name) || null,
+      setItem: (name, value) => stored.set(name, value),
+    },
+    IntersectionObserver: class {
+      observe() {}
+    },
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    MutationObserver: class {
+      observe() {}
+    },
+    navigator: { locks: null },
+    setTimeout,
+    clearTimeout,
+    requestAnimationFrame: () => {},
+    Date,
+    Map,
+    Set,
+  }
+  const code = await readFile(new URL('content.js', dist), 'utf8')
+  vm.runInNewContext(`${code}\nglobalThis.testReadStats = readStats`, context)
+  const stats = context.testReadStats()
+  assert.equal(stats.packs, 0)
+  assert.equal(stats.counts.R, 0)
+  assert.equal(stats.dailyReset, true)
+  assert.equal(JSON.parse(stored.get(key)).day, stats.day)
+})
+
+test('temporary game rate limits pause and retry pack opening', async () => {
+  let requests = 0
+  const context = {
+    window: { addEventListener() {} },
+    document: { body: null, querySelector: () => null },
+    location: { pathname: '/' },
+    localStorage: { getItem: () => null },
+    IntersectionObserver: class {
+      observe() {}
+    },
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    MutationObserver: class {
+      observe() {}
+    },
+    fetch: async () => {
+      requests += 1
+      return requests === 1
+        ? new Response(
+            JSON.stringify({
+              rate_limited: true,
+              rate_limit_daily: false,
+              retry_after: new Date(Date.now() - 100).toISOString(),
+            }),
+            { status: 429, headers: { 'content-type': 'application/json' } },
+          )
+        : new Response(
+            JSON.stringify({ cards: [{ id: 'card-1' }], packs_remaining: 0 }),
+          )
+    },
+    Response,
+    AbortController,
+    AbortSignal,
+    setTimeout,
+    clearTimeout,
+    requestAnimationFrame: () => {},
+    Date,
+    Map,
+    Set,
+  }
+  const code = await readFile(new URL('content.js', dist), 'utf8')
+  vm.runInNewContext(`${code}\nglobalThis.testOpenOne = openOnePack`, context)
+  const result = await context.testOpenOne(new AbortController().signal)
+  assert.equal(requests, 2)
+  assert.equal(result.packs_remaining, 0)
 })

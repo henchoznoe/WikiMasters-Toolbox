@@ -1,14 +1,12 @@
 # Roadmap
 
-The first public release is limited to average card prices and automatic pack opening. The earlier multi-feature extension was intentionally replaced with a smaller TypeScript codebase.
+The first Chrome Web Store release contains average card prices and automatic pack opening. It has been submitted for review. The next release adds manual bulk opening, rarity statistics, and a cleaner interface.
 
-## Before publication
+## Next release
 
-- Test collection cards, marketplace details, pack views, and automatic opening in a signed-in Chrome session.
-- Confirm the game's current API response shapes and rate-limit behavior.
-- Review the extension's controls on desktop and narrow screens.
-- Create the Store listing, screenshots, privacy disclosures, and publisher credentials.
-- Make the repository public and expose the privacy policy URL before Store submission.
+- Verify manual bulk opening with available packs in a signed-in Chrome session.
+- Confirm the next release's Chrome Web Store listing and privacy disclosures.
+- Merge the feature through `develop` after review, then release from `main`.
 
 ## Later improvements
 
