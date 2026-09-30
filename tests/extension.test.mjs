@@ -1,9 +1,29 @@
 import assert from 'node:assert/strict'
 import { readdir, readFile } from 'node:fs/promises'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
+import { build } from 'esbuild'
 
 const dist = new URL('../dist/', import.meta.url)
+const root = fileURLToPath(new URL('../', import.meta.url))
+
+async function exposeModule(module, names, context) {
+  const imports = names.join(', ')
+  const result = await build({
+    stdin: {
+      contents: `import { ${imports} } from './src/content/${module}.ts'; Object.assign(globalThis, { ${imports} })`,
+      resolveDir: root,
+      sourcefile: 'test-entry.ts',
+    },
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    write: false,
+    define: { WM_TOOLBOX_CSS: '""' },
+  })
+  vm.runInNewContext(result.outputFiles[0].text, context)
+}
 
 test('the package contains only Chrome-targeted files', async () => {
   const manifest = JSON.parse(
@@ -28,6 +48,29 @@ test('the package contains only Chrome-targeted files', async () => {
     const icon = await readFile(new URL(`icons/icon-${size}.png`, dist))
     assert.equal(icon.subarray(1, 4).toString(), 'PNG')
   }
+})
+
+test('the shared panel resolves labels by page', async () => {
+  const context = {
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+  }
+  await exposeModule('panel', ['resolvePanelPage'], context)
+  const pages = [
+    { id: 'packs', label: 'Packs', matches: path => path === '/pulls' },
+    {
+      id: 'collection',
+      label: 'Collection',
+      matches: path => path === '/collection',
+    },
+  ]
+  assert.equal(context.resolvePanelPage('/pulls', pages).label, 'Packs')
+  assert.equal(
+    context.resolvePanelPage('/collection', pages).label,
+    'Collection',
+  )
+  assert.equal(context.resolvePanelPage('/settings', pages), null)
 })
 
 test('the network bridge exposes only relevant card data and preserves fetch responses', async () => {
@@ -151,12 +194,8 @@ test('automatic opening consumes one pack and stops when none remain', async () 
     Map,
     Set,
   }
-  const code = await readFile(new URL('content.js', dist), 'utf8')
-  vm.runInNewContext(
-    `${code}\nglobalThis.testOpen = openAvailablePacks`,
-    context,
-  )
-  await context.testOpen(new AbortController().signal)
+  await exposeModule('packs', ['openAvailablePacks'], context)
+  await context.openAvailablePacks(new AbortController().signal)
   assert.equal(requests, 1)
   const stats = JSON.parse(stored.get('wm_toolbox_pack_stats_v1'))
   assert.equal(stats.packs, 1)
@@ -218,9 +257,8 @@ test('manual bulk opening refreshes the game after every available pack is opene
     Map,
     Set,
   }
-  const code = await readFile(new URL('content.js', dist), 'utf8')
-  vm.runInNewContext(`${code}\nglobalThis.testRunPacks = runPacks`, context)
-  await context.testRunPacks('manual')
+  await exposeModule('packs', ['runPacks'], context)
+  await context.runPacks('manual')
   await Promise.resolve()
   assert.equal(requests, 3)
   assert.equal(reloads, 1)
@@ -230,7 +268,6 @@ test('manual bulk opening refreshes the game after every available pack is opene
 })
 
 test('scheduled opening uses local 24-hour time', async () => {
-  const code = await readFile(new URL('content.js', dist), 'utf8')
   const context = {
     window: { addEventListener() {} },
     document: { body: null },
@@ -246,12 +283,9 @@ test('scheduled opening uses local 24-hour time', async () => {
     Map,
     Set,
   }
-  vm.runInNewContext(
-    `${code}\nglobalThis.testFormatLocalTime = formatLocalTime`,
-    context,
-  )
+  await exposeModule('packs', ['formatLocalTime'], context)
   const timestamp = new Date(2026, 8, 30, 22, 24).getTime()
-  assert.equal(context.testFormatLocalTime(timestamp), '22h24')
+  assert.equal(context.formatLocalTime(timestamp), '22h24')
 })
 
 test('daily statistics reset after the local date changes', async () => {
@@ -292,9 +326,8 @@ test('daily statistics reset after the local date changes', async () => {
     Map,
     Set,
   }
-  const code = await readFile(new URL('content.js', dist), 'utf8')
-  vm.runInNewContext(`${code}\nglobalThis.testReadStats = readStats`, context)
-  const stats = context.testReadStats()
+  await exposeModule('stats', ['readStats'], context)
+  const stats = context.readStats()
   assert.equal(stats.packs, 0)
   assert.equal(stats.counts.R, 0)
   assert.equal(stats.dailyReset, true)
@@ -342,9 +375,8 @@ test('temporary game rate limits pause and retry pack opening', async () => {
     Map,
     Set,
   }
-  const code = await readFile(new URL('content.js', dist), 'utf8')
-  vm.runInNewContext(`${code}\nglobalThis.testOpenOne = openOnePack`, context)
-  const result = await context.testOpenOne(new AbortController().signal)
+  await exposeModule('packs', ['openOnePack'], context)
+  const result = await context.openOnePack(new AbortController().signal)
   assert.equal(requests, 2)
   assert.equal(result.packs_remaining, 0)
 })

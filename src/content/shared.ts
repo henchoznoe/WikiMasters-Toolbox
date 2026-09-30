@@ -1,0 +1,25 @@
+declare const WM_TOOLBOX_CSS: string
+
+const toolboxSheet = new CSSStyleSheet()
+toolboxSheet.replaceSync(WM_TOOLBOX_CSS)
+
+export type Card = { id: string; title: string; rarity: string | null }
+
+export function createToolboxRoot(host: HTMLElement): ShadowRoot {
+  const root = host.attachShadow({ mode: 'open' })
+  root.adoptedStyleSheets = [toolboxSheet]
+  return root
+}
+
+export function normalizeTitle(value: string | null): string {
+  return (value || '').normalize('NFC').replace(/\s+/g, ' ').trim()
+}
+
+export function isCard(value: unknown): value is Card {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      typeof (value as Card).id === 'string' &&
+      typeof (value as Card).title === 'string',
+  )
+}

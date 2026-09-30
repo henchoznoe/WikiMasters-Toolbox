@@ -1,4 +1,6 @@
-import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, stat } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
+import { build } from 'esbuild'
 
 const root = new URL('../', import.meta.url)
 const dist = new URL('../dist/', import.meta.url)
@@ -26,6 +28,20 @@ if (
   throw new Error('Content scripts must target only WikiMasters.')
 }
 
+const css = await readFile(new URL('src/toolbox.css', root), 'utf8')
+await build({
+  entryPoints: [
+    fileURLToPath(new URL('src/network.ts', root)),
+    fileURLToPath(new URL('src/content.ts', root)),
+  ],
+  outdir: fileURLToPath(dist),
+  entryNames: '[name]',
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  target: 'chrome111',
+  define: { WM_TOOLBOX_CSS: JSON.stringify(css) },
+})
 for (const script of manifest.content_scripts) {
   for (const path of [...(script.js || []), ...(script.css || [])]) {
     const file = new URL(path, dist)
@@ -33,13 +49,6 @@ for (const script of manifest.content_scripts) {
       throw new Error(`Missing build output: ${path}`)
   }
 }
-
-const css = await readFile(new URL('src/toolbox.css', root), 'utf8')
-const content = await readFile(new URL('content.js', dist), 'utf8')
-await writeFile(
-  new URL('content.js', dist),
-  `const WM_TOOLBOX_CSS = ${JSON.stringify(css)};\n${content}`,
-)
 await mkdir(new URL('icons/', dist), { recursive: true })
 for (const path of Object.values(manifest.icons || {})) {
   if (typeof path !== 'string' || !/^icons\/icon-\d+\.png$/.test(path)) {

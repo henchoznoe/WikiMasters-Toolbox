@@ -20,7 +20,9 @@ pnpm package
 
 Load the `dist/` directory in `chrome://extensions/` after enabling Developer mode. Reload the extension and the WikiMasters tab after each build. The ZIP in `artifacts/` is intended for the Chrome Web Store.
 
-The source lives in `src/`. TypeScript compiles to `dist/network.js` and `dist/content.js`. The small stylesheet in `src/toolbox.css` is embedded in `content.js` and applied only inside the extension's shadow roots, leaving the game's styles untouched. The packaged extension contains the two scripts, icons, and `manifest.json`.
+The source lives in `src/`. TypeScript checks every module, then esbuild bundles two browser scripts into `dist/network.js` and `dist/content.js`. The small stylesheet in `src/toolbox.css` is embedded in `content.js` and applied only inside the extension's shadow roots, leaving the game's styles untouched. The packaged extension contains the two scripts, icons, and `manifest.json`.
+
+`src/content.ts` handles startup and page events. The `src/content/` modules separate prices, pack opening, statistics, and the panel UI. `src/content/routes.ts` lists the pages that have a Toolbox panel. Each page supplies its label, route match, content, and optional mount or cleanup hooks; `src/content/panel.ts` supplies the shared **Toolbox** header and show/hide behavior. Add future page panels through this registry rather than placing their controls in the entry script. The extension currently shows a panel only on `/pulls`.
 
 ## Usage
 
