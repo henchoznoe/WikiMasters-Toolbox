@@ -45,6 +45,7 @@ const ERROR_TTL = 60 * 1000
 const PRICE_PREFIX = 'wm_toolbox_price_v1_'
 const AUTO_KEY = 'wm_toolbox_auto_v1'
 const STATS_KEY = 'wm_toolbox_pack_stats_v1'
+const PANEL_KEY = 'wm_toolbox_panel_collapsed_v1'
 const MAX_PACKS_PER_CYCLE = 100
 const RARITIES = ['L', 'UR', 'SR', 'R', 'PC', 'C', 'Other'] as const
 const cardsById = new Map<string, Card>()
@@ -396,6 +397,25 @@ let runController: AbortController | null = null
 let runMode: 'manual' | 'auto' | null = null
 let statusText = 'Disabled'
 let openedThisCycle = 0
+let confirmationTimer: ReturnType<typeof setTimeout> | null = null
+
+function readPanelCollapsed(): boolean {
+  try {
+    const saved = localStorage.getItem(PANEL_KEY)
+    if (saved !== null) return saved === 'true'
+  } catch {
+    /* Storage unavailable. */
+  }
+  return window.matchMedia('(max-width: 600px)').matches
+}
+
+function writePanelCollapsed(collapsed: boolean): void {
+  try {
+    localStorage.setItem(PANEL_KEY, String(collapsed))
+  } catch {
+    /* Storage unavailable. */
+  }
+}
 
 function readPrefs(): AutoPrefs {
   try {
@@ -435,6 +455,11 @@ function randomDelay(): number {
   )
 }
 
+function formatLocalTime(timestamp: number): string {
+  const date = new Date(timestamp)
+  return `${String(date.getHours()).padStart(2, '0')}h${String(date.getMinutes()).padStart(2, '0')}`
+}
+
 function setStatus(value: string): void {
   statusText = value
   const status = document
@@ -452,9 +477,7 @@ function scheduleAuto(reset = false): void {
     writePrefs()
   }
   const remaining = Math.max(1_000, prefs.nextAt - Date.now())
-  setStatus(
-    `Next opening around ${new Date(prefs.nextAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
-  )
+  setStatus(`Next opening around ${formatLocalTime(prefs.nextAt)}`)
   autoTimer = setTimeout(() => {
     autoTimer = null
     void runAuto()
@@ -513,7 +536,7 @@ async function openOnePack(signal: AbortSignal): Promise<PackResponse> {
       ) {
         throw new Error('Temporary rate limit; try again later')
       }
-      setStatus(`Game rate limit: waiting ${Math.ceil(waitMs / 1_000)} s`)
+      setStatus('The game is busy. Retrying shortly…')
       await wait(waitMs, signal)
       continue
     }
@@ -527,9 +550,10 @@ async function openOnePack(signal: AbortSignal): Promise<PackResponse> {
 async function openAvailablePacks(signal: AbortSignal): Promise<boolean> {
   openedThisCycle = 0
   let remaining = Number.NaN
+  updateProgress(0, null)
   for (let index = 0; index < MAX_PACKS_PER_CYCLE; index += 1) {
     if (signal.aborted) throw signal.reason
-    setStatus(`Opening packs: ${openedThisCycle} opened`)
+    setStatus(`Opening pack ${index + 1}…`)
     const response = await openOnePack(signal)
     if (!Array.isArray(response.cards) || response.cards.length === 0) {
       if (response.packs_remaining === 0) break
@@ -538,6 +562,12 @@ async function openAvailablePacks(signal: AbortSignal): Promise<boolean> {
     openedThisCycle += 1
     remaining = Number(response.packs_remaining)
     await recordPack(response.cards)
+    updateProgress(
+      openedThisCycle,
+      Number.isFinite(remaining)
+        ? openedThisCycle + Math.max(0, remaining)
+        : null,
+    )
     updateOpenAllButton()
     if (Number.isFinite(remaining) && remaining <= 0) break
     await wait(500 + Math.round(Math.random() * 1_500), signal)
@@ -547,6 +577,7 @@ async function openAvailablePacks(signal: AbortSignal): Promise<boolean> {
 
 async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
   if (runController || (mode === 'auto' && !prefs.enabled)) return
+  clearOpenAllConfirmation()
   if (!navigator.locks) {
     setStatus('Cross-tab lock unavailable')
     if (mode === 'auto') scheduleAuto(true)
@@ -584,11 +615,14 @@ async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
             : `Failed: ${error instanceof Error ? error.message : String(error)}`,
         )
       } finally {
+        const shouldRefresh =
+          openedThisCycle > 0 && /^\/pulls(\/|$)/.test(location.pathname)
         runController = null
         runMode = null
         updateOpenAllButton()
         prefs = readPrefs()
         if (prefs.enabled) scheduleAuto(true)
+        if (shouldRefresh) setTimeout(() => location.reload(), 800)
       }
     },
   )
@@ -623,12 +657,40 @@ function updateOpenAllButton(): void {
     ?.shadowRoot?.querySelector<HTMLButtonElement>('[data-wm-toolbox-open-all]')
   if (!button) return
   button.disabled = runMode === 'auto'
+  button.classList.toggle('wm-open-all-confirm', confirmationTimer !== null)
   button.textContent =
     runMode === 'manual'
       ? `Stop opening (${openedThisCycle})`
       : runMode === 'auto'
         ? 'Opening automatically…'
-        : 'Open all available packs'
+        : confirmationTimer
+          ? 'Confirm opening all packs'
+          : 'Open all available packs'
+}
+
+function clearOpenAllConfirmation(): void {
+  if (confirmationTimer) clearTimeout(confirmationTimer)
+  confirmationTimer = null
+  updateOpenAllButton()
+}
+
+function updateProgress(opened: number, total: number | null): void {
+  const progress = document
+    .querySelector<HTMLElement>('[data-wm-toolbox-panel]')
+    ?.shadowRoot?.querySelector<HTMLElement>('[data-wm-toolbox-progress]')
+  if (!progress) return
+  progress.hidden = false
+  const meter = progress.querySelector('progress')
+  const label = progress.querySelector('[data-wm-toolbox-progress-label]')
+  if (!meter || !label) return
+  if (total === null) {
+    meter.removeAttribute('value')
+    label.textContent = 'Checking available packs…'
+  } else {
+    meter.max = Math.max(1, total)
+    meter.value = opened
+    label.textContent = `${opened} of ${total} packs opened`
+  }
 }
 
 function renderStats(): void {
@@ -701,38 +763,10 @@ function renderStats(): void {
   container.replaceChildren(head, grid, controls)
 }
 
-function confirmOpenAll(button: HTMLButtonElement): void {
-  const root = button.getRootNode() as ShadowRoot
-  if (root.querySelector('[data-wm-toolbox-confirm]')) return
-  const confirmation = document.createElement('div')
-  confirmation.dataset.wmToolboxConfirm = '1'
-  confirmation.className = 'wm-confirmation'
-  const warning = document.createElement('p')
-  warning.textContent =
-    'Open every available pack now? This consumes the packs.'
-  const actions = document.createElement('div')
-  actions.className = 'wm-confirmation-actions'
-  const cancel = document.createElement('button')
-  cancel.type = 'button'
-  cancel.className = 'wm-quiet-button'
-  cancel.textContent = 'Cancel'
-  cancel.addEventListener('click', () => confirmation.remove())
-  const proceed = document.createElement('button')
-  proceed.type = 'button'
-  proceed.className = 'wm-primary-button'
-  proceed.textContent = 'Open packs'
-  proceed.addEventListener('click', () => {
-    confirmation.remove()
-    void runPacks('manual')
-  })
-  actions.append(cancel, proceed)
-  confirmation.append(warning, actions)
-  button.insertAdjacentElement('afterend', confirmation)
-}
-
 function ensureAutoPanel(): void {
   const existing = document.querySelector('[data-wm-toolbox-panel]')
   if (!/^\/pulls(\/|$)/.test(location.pathname)) {
+    clearOpenAllConfirmation()
     if (runMode === 'manual')
       runController?.abort(new Error('Left the Packs page'))
     existing?.remove()
@@ -748,6 +782,8 @@ function ensureAutoPanel(): void {
   const panel = document.createElement('section')
   panel.setAttribute('aria-label', 'WikiMasters Toolbox pack controls')
   panel.className = 'wm-panel'
+  const initiallyExpanded = !readPanelCollapsed()
+  panel.classList.toggle('wm-panel-open', initiallyExpanded)
 
   const header = document.createElement('div')
   header.className = 'wm-panel-header'
@@ -760,11 +796,16 @@ function ensureAutoPanel(): void {
   const disclosure = document.createElement('button')
   disclosure.type = 'button'
   disclosure.className = 'wm-panel-disclosure'
-  disclosure.setAttribute('aria-label', 'Show Toolbox controls')
-  disclosure.setAttribute('aria-expanded', 'false')
-  disclosure.textContent = 'Show'
+  disclosure.setAttribute(
+    'aria-label',
+    `${initiallyExpanded ? 'Hide' : 'Show'} Toolbox controls`,
+  )
+  disclosure.setAttribute('aria-expanded', String(initiallyExpanded))
+  disclosure.textContent = initiallyExpanded ? 'Hide' : 'Show'
   disclosure.addEventListener('click', () => {
     const expanded = panel.classList.toggle('wm-panel-open')
+    writePanelCollapsed(!expanded)
+    if (!expanded) clearOpenAllConfirmation()
     disclosure.setAttribute(
       'aria-label',
       `${expanded ? 'Hide' : 'Show'} Toolbox controls`,
@@ -783,8 +824,24 @@ function ensureAutoPanel(): void {
       runController?.abort(new Error('Stopped by user'))
       return
     }
-    confirmOpenAll(openAllButton)
+    if (confirmationTimer) {
+      clearOpenAllConfirmation()
+      void runPacks('manual')
+      return
+    }
+    confirmationTimer = setTimeout(clearOpenAllConfirmation, 8_000)
+    updateOpenAllButton()
   })
+  const progress = document.createElement('div')
+  progress.dataset.wmToolboxProgress = '1'
+  progress.className = 'wm-progress'
+  progress.hidden = true
+  const progressLabel = document.createElement('span')
+  progressLabel.dataset.wmToolboxProgressLabel = '1'
+  progressLabel.textContent = 'Checking available packs…'
+  const progressMeter = document.createElement('progress')
+  progressMeter.max = 1
+  progress.append(progressLabel, progressMeter)
   const toggleLabel = document.createElement('label')
   toggleLabel.className = 'wm-setting-toggle'
   toggleLabel.style.marginTop = '13px'
@@ -844,7 +901,7 @@ function ensureAutoPanel(): void {
   stats.className = 'wm-stats'
   const body = document.createElement('div')
   body.className = 'wm-panel-body'
-  body.append(openAllButton, toggleLabel, fields, status, note, stats)
+  body.append(openAllButton, progress, toggleLabel, fields, status, note, stats)
   panel.append(header, body)
   createToolboxRoot(host).append(panel)
   document.body.append(host)

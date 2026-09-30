@@ -164,6 +164,96 @@ test('automatic opening consumes one pack and stops when none remain', async () 
   assert.equal(stats.counts.Other, 0)
 })
 
+test('manual bulk opening refreshes the game after every available pack is opened', async () => {
+  const stored = new Map()
+  let requests = 0
+  let reloads = 0
+  const context = {
+    window: { addEventListener() {} },
+    document: { body: null, querySelector: () => null },
+    location: {
+      pathname: '/pulls',
+      reload: () => {
+        reloads += 1
+      },
+    },
+    localStorage: {
+      getItem: key => stored.get(key) || null,
+      setItem: (key, value) => stored.set(key, value),
+    },
+    navigator: {
+      locks: {
+        request: (_name, options, callback) =>
+          typeof options === 'function' ? options() : callback({}),
+      },
+    },
+    IntersectionObserver: class {
+      observe() {}
+    },
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    MutationObserver: class {
+      observe() {}
+    },
+    fetch: async () => {
+      requests += 1
+      return new Response(
+        JSON.stringify({
+          cards: [{ id: `card-${requests}`, rarity: 'R' }],
+          packs_remaining: 3 - requests,
+        }),
+      )
+    },
+    Response,
+    AbortController,
+    AbortSignal,
+    setTimeout: (callback, delay) => {
+      if (delay < 10_000) queueMicrotask(callback)
+      return 1
+    },
+    clearTimeout: () => {},
+    requestAnimationFrame: () => {},
+    Date,
+    Map,
+    Set,
+  }
+  const code = await readFile(new URL('content.js', dist), 'utf8')
+  vm.runInNewContext(`${code}\nglobalThis.testRunPacks = runPacks`, context)
+  await context.testRunPacks('manual')
+  await Promise.resolve()
+  assert.equal(requests, 3)
+  assert.equal(reloads, 1)
+  const stats = JSON.parse(stored.get('wm_toolbox_pack_stats_v1'))
+  assert.equal(stats.packs, 3)
+  assert.equal(stats.counts.R, 3)
+})
+
+test('scheduled opening uses local 24-hour time', async () => {
+  const code = await readFile(new URL('content.js', dist), 'utf8')
+  const context = {
+    window: { addEventListener() {} },
+    document: { body: null },
+    location: { pathname: '/' },
+    localStorage: { getItem: () => null },
+    IntersectionObserver: class {},
+    MutationObserver: class {},
+    requestAnimationFrame: () => {},
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    Date,
+    Map,
+    Set,
+  }
+  vm.runInNewContext(
+    `${code}\nglobalThis.testFormatLocalTime = formatLocalTime`,
+    context,
+  )
+  const timestamp = new Date(2026, 8, 30, 22, 24).getTime()
+  assert.equal(context.testFormatLocalTime(timestamp), '22h24')
+})
+
 test('daily statistics reset after the local date changes', async () => {
   const key = 'wm_toolbox_pack_stats_v1'
   const stored = new Map([
