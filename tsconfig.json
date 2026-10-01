@@ -10,5 +10,5 @@
     "noEmitOnError": true,
     "removeComments": false
   },
-  "include": ["src/network.ts", "src/content.ts"]
+  "include": ["src/**/*.ts"]
 }
