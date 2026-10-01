@@ -4,6 +4,13 @@ import type { ToolboxPage } from './panel'
 
 export const toolboxPages: readonly ToolboxPage[] = [
   {
+    id: 'collection',
+    label: 'Collection',
+    matches: path => /^\/collection(\/|$)/.test(path),
+    createBody: createCollectionBody,
+    onMount: mountCollectionBody,
+  },
+  {
     id: 'packs',
     label: 'Packs',
     matches: path => /^\/pulls(\/|$)/.test(path),
@@ -13,3 +20,5 @@ export const toolboxPages: readonly ToolboxPage[] = [
     onUnmount: leavePacksPage,
   },
 ]
+
+import { createCollectionBody, mountCollectionBody } from './collection-panel'

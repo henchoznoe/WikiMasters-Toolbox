@@ -593,3 +593,32 @@
     display: none;
   }
 }
+
+.wm-collection-summary {
+  color: #cfebdb;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.wm-collection-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.wm-collection-actions .wm-primary-button {
+  flex: 1;
+}
+
+.wm-collection-progress {
+  width: 100%;
+  height: 7px;
+  margin-top: 10px;
+  accent-color: #31d39b;
+}
+
+.wm-collection-progress[hidden],
+.wm-collection-actions button[hidden],
+.wm-note[hidden] {
+  display: none;
+}

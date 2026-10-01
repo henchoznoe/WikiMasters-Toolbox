@@ -1,8 +1,9 @@
 # WikiMasters Toolbox
 
-A Chrome extension for [WikiMasters](https://www.wiki-masters.com/) focused on card prices and packs:
+A Chrome extension for [WikiMasters](https://www.wiki-masters.com/) focused on collection tools, card prices and packs:
 
 - Average sale prices on cards in the collection, marketplace detail pages, and pack views.
+- A full local collection index with identified copies, loading progress, stop/resume and synchronization after game actions.
 - Optional automatic opening of available packs at a configurable interval.
 - A manual action to open all available packs or a chosen number, plus local statistics by card rarity.
 
@@ -22,9 +23,15 @@ Load the `dist/` directory in `chrome://extensions/` after enabling Developer mo
 
 The source lives in `src/`. TypeScript checks every module, then esbuild bundles two browser scripts into `dist/network.js` and `dist/content.js`. The small stylesheet in `src/toolbox.css` is embedded in `content.js` and applied only inside the extension's shadow roots, leaving the game's styles untouched. The packaged extension contains the two scripts, icons, and `manifest.json`.
 
-`src/content.ts` handles startup and page events. The `src/content/` modules separate prices, pack opening, statistics, and the panel UI. `src/content/routes.ts` lists the pages that have a Toolbox panel. Each page supplies its label, route match, content, and optional mount or cleanup hooks; `src/content/panel.ts` supplies the shared **Toolbox** header and show/hide behavior. Add future page panels through this registry rather than placing their controls in the entry script. The extension currently shows a panel only on `/pulls`.
+`src/content.ts` handles startup and page events. The `src/content/` modules separate the collection index, prices, pack opening, statistics, and the panel UI. `src/cards.ts` maps game data to catalogue IDs, snapshot rarities, shiny variants and possession IDs; catalogue IDs identify price requests, while possession IDs identify owned copies. `src/content/routes.ts` lists the pages that have a Toolbox panel. Each page supplies its label, route match, content, and optional mount or cleanup hooks; `src/content/panel.ts` supplies the shared **Toolbox** header and show/hide behavior. Add future page panels through this registry rather than placing their controls in the entry script. Panels are available on `/collection` and `/pulls`.
 
 ## Usage
+
+On `/collection`, **Load collection** builds a local index of the current account's full, unfiltered collection, using the game's pages of 50 copies. It shows the loaded count and marks an incomplete index as partial. **Stop** keeps valid pages; **Resume** continues after checking the total and first page. The small refresh button restarts an interrupted load. Progress survives a reload when local storage is available. A saved partial traversal expires after 15 minutes, and a completed index becomes stale after five minutes. Busy servers and temporary network errors receive at most three attempts per request. A failed request never counts as an empty page.
+
+After the first load, observed pack openings, marketplace/trade mutations, discards, favorites and tags invalidate the index and schedule a fresh traversal. Returning to the collection, changed native collection totals and newly observed copies also trigger synchronization. Returning to a visible tab refreshes an index older than five minutes, to avoid repeated traversals while switching windows. Account changes cancel the previous traversal and restore only that account's index. No sale, trade or discard is performed by these collection controls.
+
+The index keeps each possession separately, including copies of the same catalogue card with different snapshot rarities or shiny variants. Grouped rows without distinct possession IDs are rejected. The game does not expose an atomic pagination snapshot: Toolbox checks copy IDs, page lengths, the final total and the first page before marking the index complete, but remote changes are detected on subsequent observations rather than in real time. Future collection actions must resolve a fresh possession by ID and revalidate it with the game. Price badges use the visible rarity and skip ambiguous title matches when the DOM exposes no stable ID; a title match never identifies a possession for an action.
 
 Average prices appear when supported card data is available on collection, marketplace detail, and pack pages. In the collection, the price is centered below each card's attack and defense stats. A compact age next to collection and marketplace prices shows when this browser last fetched the value; hover for the exact local time and status. The pack summary includes that check time in each price tooltip. Prices are cached for 24 hours; temporary errors are cached for one minute. The game API returns an average by rarity, but does not state the number of sales or the period used to calculate it. The 24-hour cache duration is not the sale-history window.
 
@@ -48,6 +55,8 @@ Chrome Web Store publication is prepared through the [Chrome Web Store API v2](h
 Do not commit credentials. The GitHub repository must be public before using its `PRIVACY.md` URL as the Store privacy policy URL.
 
 ## Validation limits
+
+Collection checks cover distinct possession IDs and variants, ambiguous titles, interrupted loading and restoration, bounded server retries, account changes, native mutation notifications, changed totals and duplicate IDs across pages. Chrome verification loaded all 240 copies across five pages, restored a traversal interrupted by a reload at 200 copies, and resumed it to completion. A native favorite change invalidated the index and triggered synchronization; the favorite was then restored to its original state. Live sales, accepted trades and discards have not been executed as part of this verification.
 
 The automated checks validate the build, package, API interception, manual limits, account-specific statistics, shared scheduling, mocked pack opening, and daily statistics reset. The extension was also loaded in Chrome and checked on signed-in collection, marketplace detail, and pack pages. Automatic opening and a one-pack manual run have been verified on the live game. The manual run updated account-specific statistics and kept its summary after the game's pack counter refreshed from 5 to 4 on reload. The game's price requests can fail temporarily during busy periods, so affected cards display “Price unavailable” and retry after one minute. A supported way to refresh the game's on-page pack counter without reloading was not found, so the extension retains the page reload after opening packs.
 

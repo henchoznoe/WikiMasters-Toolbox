@@ -93,7 +93,9 @@ test('the network bridge exposes only relevant card data and preserves fetch res
                   { id: 'card-2', wikipedia_title: 'Another', rarity: 'UR' },
                 ],
               }
-            : responseBody,
+            : String(url).includes('/rest/v1/profiles')
+              ? [{ id: ACCOUNT_A, is_pro: false }]
+              : responseBody,
         ),
         {
           headers: { 'content-type': 'application/json' },
@@ -128,25 +130,43 @@ test('the network bridge exposes only relevant card data and preserves fetch res
   assert.equal(events.length, 1)
   assert.deepEqual(JSON.parse(events[0].detail), {
     kind: 'collection',
-    cards: [{ id: 'card-1', title: 'Example', rarity: 'R' }],
+    cards: [
+      {
+        id: 'card-1',
+        title: 'Example',
+        rarity: 'R',
+        copyId: null,
+        shiny: false,
+      },
+    ],
+    accountId: null,
   })
 
-  await window.fetch('/api/packs/open')
+  await window.fetch('/api/packs/open', { method: 'POST' })
   await new Promise(resolve => setTimeout(resolve, 0))
-  assert.deepEqual(JSON.parse(events[1].detail), {
+  assert.deepEqual(JSON.parse(events[2].detail), {
     kind: 'pack',
-    cards: [{ id: 'card-2', title: 'Another', rarity: 'UR' }],
+    cards: [
+      {
+        id: 'card-2',
+        title: 'Another',
+        rarity: 'UR',
+        copyId: null,
+        shiny: false,
+      },
+    ],
+    accountId: null,
   })
 
   await window.fetch('https://example.com/api/my-collection')
   await new Promise(resolve => setTimeout(resolve, 0))
-  assert.equal(events.length, 2)
+  assert.equal(events.length, 3)
 
   await window.fetch(
     `https://example.supabase.co/rest/v1/profiles?select=id%2Cis_pro&id=eq.${ACCOUNT_A}`,
   )
   await new Promise(resolve => setTimeout(resolve, 0))
-  assert.deepEqual(JSON.parse(events[2].detail), {
+  assert.deepEqual(JSON.parse(events[3].detail), {
     kind: 'account',
     accountId: ACCOUNT_A,
   })

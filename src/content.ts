@@ -1,4 +1,13 @@
-import { getAccountId, setAccountId } from './content/account'
+import { getAccountId, onAccountChange, setAccountId } from './content/account'
+import {
+  getCollectionState,
+  invalidateCollection,
+  observeCollection,
+  onCollectionChange,
+  refreshCollectionIfNeeded,
+  syncCollectionFromStorage,
+} from './content/collection'
+import { renderCollectionPanel } from './content/collection-panel'
 import {
   AUTO_KEY,
   getPrefs,
@@ -14,6 +23,7 @@ import {
   registerCards,
   renderCards,
   renderMarketplace,
+  resetRegisteredCards,
   setPriceRenderCallback,
 } from './content/prices'
 import { toolboxPages } from './content/routes'
@@ -39,9 +49,24 @@ function scheduleRender(): void {
     renderMarketplace()
     syncToolboxPanel(location.pathname, toolboxPages)
     renderRunSummary()
+    renderCollectionPanel()
   }, 80)
 }
 setPriceRenderCallback(scheduleRender)
+onCollectionChange(() => {
+  registerCards([...getCollectionState().cards])
+  scheduleRender()
+})
+onAccountChange(() => {
+  resetRegisteredCards()
+  registerCards([...getCollectionState().cards])
+  renderStats()
+  renderRunSummary()
+  scheduleDailyReset()
+  scheduleRender()
+  if (/^\/collection(\/|$)/.test(location.pathname))
+    refreshCollectionIfNeeded(true)
+})
 
 if (!contentWindow.__wmToolboxContentInstalled) {
   contentWindow.__wmToolboxContentInstalled = true
@@ -51,18 +76,25 @@ if (!contentWindow.__wmToolboxContentInstalled) {
         kind?: string
         cards?: unknown[]
         accountId?: unknown
+        total?: unknown
       }
       if (data.kind === 'account') {
-        if (setAccountId(data.accountId)) {
-          renderStats()
-          renderRunSummary()
-          scheduleDailyReset()
-        }
+        setAccountId(data.accountId)
+        return
+      }
+      if (data.accountId !== getAccountId()) return
+      if (data.kind === 'collection-changed') {
+        invalidateCollection()
+        return
+      }
+      if (data.kind === 'collection-total') {
+        observeCollection([], data.total)
         return
       }
       if (Array.isArray(data.cards)) {
         const cards = data.cards.filter(isCard)
-        registerCards(cards)
+        if (data.kind === 'collection') observeCollection(cards)
+        registerCards(cards, data.kind)
         if (data.kind === 'pack') void recordPack(cards)
       }
     } catch {
@@ -70,6 +102,7 @@ if (!contentWindow.__wmToolboxContentInstalled) {
     }
   })
   window.addEventListener('storage', event => {
+    syncCollectionFromStorage(event.key)
     if (event.key === `${STATS_PREFIX}${getAccountId()}`) {
       renderStats()
       scheduleDailyReset()
@@ -89,6 +122,8 @@ if (!contentWindow.__wmToolboxContentInstalled) {
     if (location.pathname !== previousPath) {
       previousPath = location.pathname
       void hydrateRoute()
+      if (/^\/collection(\/|$)/.test(previousPath))
+        refreshCollectionIfNeeded(true)
     }
     scheduleRender()
   })
@@ -104,10 +139,18 @@ if (!contentWindow.__wmToolboxContentInstalled) {
     if (getPrefs().enabled) scheduleAuto()
   }
   window.setInterval(() => {
-    if (document.visibilityState === 'visible') scheduleRender()
+    if (document.visibilityState === 'visible') {
+      scheduleRender()
+      if (/^\/collection(\/|$)/.test(location.pathname))
+        refreshCollectionIfNeeded()
+    }
   }, 60_000)
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') scheduleRender()
+    if (document.visibilityState === 'visible') {
+      scheduleRender()
+      if (/^\/collection(\/|$)/.test(location.pathname))
+        refreshCollectionIfNeeded()
+    }
   })
   start()
 }
