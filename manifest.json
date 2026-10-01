@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WikiMasters Toolbox",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Average card prices and automatic pack opening for WikiMasters.",
   "minimum_chrome_version": "111",
   "icons": {
