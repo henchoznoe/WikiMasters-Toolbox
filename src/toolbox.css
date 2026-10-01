@@ -52,14 +52,14 @@
   font-size: 12px;
 }
 
-:host([data-wm-toolbox-price-layout='collection']) {
+:host([data-wm-toolbox-price-layout='footer']) {
   display: flex;
   width: 100%;
   flex: none;
   justify-content: center;
 }
 
-:host([data-wm-toolbox-price-layout='collection']) .wm-price-badge {
+:host([data-wm-toolbox-price-layout='footer']) .wm-price-badge {
   justify-content: center;
   margin-top: 0;
   padding: 4px 9px;
@@ -68,7 +68,7 @@
   box-shadow: 0 2px 8px #0005;
 }
 
-:host([data-wm-toolbox-price-layout='collection']) .wm-price-value {
+:host([data-wm-toolbox-price-layout='footer']) .wm-price-value {
   font-size: 13px;
 }
 
@@ -734,3 +734,27 @@
 .wm-selection-rarities { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .wm-selection-rarities button { display: flex; justify-content: space-between; align-items: center; min-height: 34px; padding: 6px 8px; border: 1px solid; border-radius: 8px; font-size: 12px; }
 .wm-rarity-badge { display: inline-flex; border: 1px solid var(--wm-stat-border, #556c60); border-radius: 4px; padding: 2px 5px; color: #1b211e; font-size: 10px; font-weight: 700; white-space: nowrap; }
+
+/* Compact common price tools. Rarity surfaces share the packs palette. */
+.wm-price-badge { font-family: inherit; cursor: pointer; }
+.wm-price-badge:focus-visible { outline: 2px solid #79e2b5; outline-offset: 3px; }
+.wm-price-controls { margin-top: 12px; border-top: 1px solid rgba(255,255,255,.12); padding-top: 10px; }
+.wm-price-controls summary, .wm-price-method summary { cursor: pointer; font-size: 12px; font-weight: 700; }
+.wm-price-controls-body { display: grid; gap: 10px; margin-top: 10px; }
+.wm-price-controls select { width: 100%; color: inherit; background: #152d24; border: 1px solid #315347; border-radius: 7px; padding: 6px; }
+.wm-price-controls input[type=number] { width: 52px; color: inherit; background: #152d24; border: 1px solid #315347; border-radius: 5px; padding: 4px; }
+.wm-price-rarities { display: flex; flex-wrap: wrap; gap: 5px; }
+.wm-price-rarities button { padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.wm-price-rarities button[aria-pressed=false] { opacity: .45; }
+.wm-price-rarities button[aria-pressed=true] { outline: 1px solid rgba(255,255,255,.8); outline-offset: 1px; }
+.wm-price-inspector { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; box-sizing: border-box; width: min(360px,calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; color: #ecf2ee; background: #111715; border: 1px solid #293a33; border-radius: 14px; padding: 14px; box-shadow: 0 12px 42px #0008; font-family: system-ui,sans-serif; }
+.wm-price-inspector-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.wm-price-inspector h2 { margin: 0; font-size: 15px; }
+.wm-price-inspector [data-price-inspector-value] { font-size: 22px; font-weight: 800; margin: 12px 0; }
+.wm-price-inspector svg { display: block; width: 100%; height: 88px; color: #79e2b5; }
+.wm-price-inspector .wm-note { font-size: 11px; line-height: 1.5; color: #a7b8ad; }
+.wm-price-inspector .wm-price-method { border-top: 1px solid #315347; padding-top: 10px; }
+
+.wm-run-card-price { border: 0; background: transparent; padding: 0; font: inherit; cursor: pointer; color: inherit; }
+.wm-price-inspector button:focus-visible, .wm-price-controls select:focus-visible { outline: 2px solid #79e2b5; outline-offset: 3px; }
+.wm-price-controls progress[hidden], .wm-price-controls button[hidden] { display: none; }

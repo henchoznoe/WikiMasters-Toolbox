@@ -1,10 +1,12 @@
 import { getAccountId } from './account'
+import { openPriceInspector } from './price-inspector'
 import {
   type PriceQuote,
   presentPrice,
   readPriceQuote,
   requestPriceQuote,
 } from './prices'
+import { createRarityBadge } from './rarity'
 
 export type RunCard = {
   id: string | null
@@ -24,7 +26,6 @@ export type RunSummary = {
 }
 
 export const RUN_SUMMARY_KEY = 'wm_toolbox_last_pack_run_v1'
-const RARITIES = new Set(['L', 'UR', 'SR', 'R', 'PC', 'C'])
 const PRICE_PREFETCH_LIMIT = 50
 let priceObserver: IntersectionObserver | null = null
 
@@ -124,11 +125,9 @@ function prefetchPrices(summary: RunSummary): void {
 }
 
 function priceText(quote: PriceQuote | null): string {
-  return quote?.status === 'available'
-    ? `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(quote.average)} W`
-    : quote?.status === 'loading'
-      ? '…'
-      : '—'
+  if (!quote) return '—'
+  const presentation = presentPrice(quote)
+  return `${presentation.value}${presentation.age ? ` · ${presentation.age}` : ''}`
 }
 
 function priceHint(quote: PriceQuote | null): string {
@@ -184,11 +183,8 @@ function buildRunBody(details: HTMLDetailsElement, summary: RunSummary): void {
       row.setAttribute('role', 'listitem')
       row.dataset.wmRunCardIndex = String(index)
       if (card.id) row.dataset.wmRunCardId = card.id
-      const rarity = document.createElement('span')
-      rarity.className = 'wm-run-rarity'
-      rarity.textContent = card.rarity || '—'
-      if (card.rarity && RARITIES.has(card.rarity))
-        rarity.dataset.rarity = card.rarity.toLowerCase()
+      const rarity = createRarityBadge(card.rarity)
+      rarity.classList.add('wm-run-rarity')
       const title = document.createElement('span')
       title.className = 'wm-run-card-title'
       title.textContent = card.title
@@ -199,7 +195,12 @@ function buildRunBody(details: HTMLDetailsElement, summary: RunSummary): void {
         packTag.textContent = `P${card.pack}`
         row.append(rarity, title, packTag)
       } else row.append(rarity, title)
-      const price = document.createElement('span')
+      const price = document.createElement('button')
+      price.type = 'button'
+      price.addEventListener('click', () => {
+        if (card.id && card.rarity)
+          openPriceInspector(card.id, card.rarity, card.title)
+      })
       price.className = 'wm-run-card-price'
       price.textContent = '…'
       row.append(price)

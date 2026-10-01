@@ -37,14 +37,17 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 
 ## 2. Prix, estimation et qualité du marché
 
-- [ ] **PRICE-01 · P0 · D2 — Prix dans la collection globale.** Afficher la moyenne de la rareté correcte dans la fiche d'une carte inspectée sur `/global-collection`, même si elle n'est pas possédée.
-- [ ] **PRICE-02 · P0 · D3 — Chargement des prix par lot.** Choisir les raretés, ne charger que les prix manquants ou forcer l'actualisation, avec progression, annulation et plafond de requêtes.
-- [ ] **PRICE-03 · P0 · D2 — États cohérents partout.** Employer le même `…`, `—`, `!`, âge et infobulle dans collection, paquets, marché, échanges et listes ; distinguer absence de ventes et échec réseau.
-- [ ] **PRICE-04 · P0 · D3 — Signal de confiance du prix.** Si la source expose un jour volume, période ou dispersion, les montrer. Jusque-là, signaler « moyenne seule » et éviter toute promesse de prix juste.
-- [ ] **PRICE-05 · P1 · D3 — Rafraîchissement ciblé.** Actualiser une carte, une sélection ou une rareté sans vider tout le cache ; respecter les limites et montrer la dernière tentative.
-- [ ] **PRICE-06 · P1 · D4 — Historique local des observations.** Enregistrer les prix réellement vus au fil des jours pour tracer une évolution, avec un indicateur de trous et sans inventer d'historique antérieur.
-- [ ] **PRICE-07 · P1 · D5 — Estimation robuste à partir des ventes.** Étudier les transactions accessibles, la médiane, les valeurs extrêmes et le volume par rareté ; n'afficher une estimation alternative que si l'échantillon est suffisant. **À valider :** disponibilité des ventes individuelles et fenêtre autorisée.
-- [ ] **PRICE-08 · P1 · D3 — Fourchette et incertitude.** Montrer une plage indicative et un niveau de confiance quand les données le permettent, avec une explication courte de la méthode.
+- [x] **PRICE-01 · P0 · D2 — Prix dans la collection globale.** Afficher la moyenne de la rareté correcte dans la fiche d'une carte inspectée sur `/global-collection`, même si elle n'est pas possédée.
+- [x] **PRICE-02 · P0 · D3 — Chargement des prix par lot.** Choisir les raretés, ne charger que les prix manquants ou forcer l'actualisation, avec progression, annulation et plafond de requêtes.
+- [x] **PRICE-03 · P0 · D2 — États cohérents partout.** Employer le même `…`, `—`, `!`, âge et infobulle dans collection, paquets, marché, échanges et listes ; distinguer absence de ventes et échec réseau.
+- [x] **PRICE-04 · P0 · D3 — Signal de confiance du prix.** Si la source expose un jour volume, période ou dispersion, les montrer. Jusque-là, signaler « moyenne seule » et éviter toute promesse de prix juste.
+- [x] **PRICE-05 · P1 · D3 — Rafraîchissement ciblé.** Actualiser une carte, une sélection ou une rareté sans vider tout le cache ; respecter les limites et montrer la dernière tentative.
+- [x] **PRICE-06 · P1 · D4 — Historique local des observations.** Enregistrer les prix réellement vus au fil des jours pour tracer une évolution, avec un indicateur de trous et sans inventer d'historique antérieur.
+- [x] **PRICE-07 · P1 · D5 — Estimation robuste à partir des ventes.** Étudier les transactions accessibles, la médiane, les valeurs extrêmes et le volume par rareté ; n'afficher une estimation alternative que si l'échantillon est suffisant. **Accès :** WikiMasters PRO ; l’analyse utilise les ventes accessibles réglées dans les 30 derniers jours, avec couverture inconnue.
+- [x] **PRICE-08 · P1 · D3 — Fourchette et incertitude.** Montrer une plage indicative et un niveau de confiance quand les données le permettent, avec une explication courte de la méthode.
+
+**Livré le 1er octobre 2026 (PRICE-01 à PRICE-08).** Moteur partagé, prix centrés sous les statistiques des grilles, toolbox de chargement/actualisation par page, sélection et rareté, progression/plafond/arrêt, états et fraîcheur communs, historique local de 90 jours sans interpolation. La moyenne native ne précise ni fenêtre ni volume : les 24 h sont le TTL du cache. Les ventes individuelles exigent actuellement WikiMasters PRO ; l’analyse reste conditionnelle à cet accès, sur les transactions valides des 30 derniers jours retournées par l’API. Médiane à partir de 5 ventes, plage P25–P75 à partir de 10, confiance prudente et couverture inconnue explicites. Les analyses sont testées sur fixtures ; leur validation sur un compte PRO reste à effectuer.
+
 - [ ] **PRICE-09 · P1 · D3 — Valeur de la collection.** Totaliser uniquement les cartes dont le prix est connu, afficher le nombre et la part non évalués, puis distinguer valeur de toutes les copies et valeur des seuls doublons.
 - [ ] **PRICE-10 · P1 · D3 — Fraîcheur adaptée au contexte.** Définir un âge acceptable plus court lors d'une vente ou d'un échange que pendant la consultation de l'album ; proposer une actualisation ciblée avant décision et conserver l'âge visible si elle échoue.
 - [ ] **PRICE-11 · P2 · D3 — Alertes de changement de prix.** Avertir dans Toolbox lorsqu'une observation fraîche franchit un seuil choisi, sans scruter le site en continu.

@@ -131,6 +131,52 @@ test('price rendering refuses ambiguous titles and uses the visible rarity', asy
   assert.equal(context.resolveVisibleCard('Same', 'R'), null)
 })
 
+test('catalogue hydration restores public cards from native cached filtered pages without importing ownership', async () => {
+  const pages = new Map([
+    [
+      'gc_v11_/api/cards?page=2&rarity=R',
+      JSON.stringify({
+        cards: [
+          { id: 'cached-card', wikipedia_title: 'Cached title', rarity: 'R' },
+        ],
+        friendOwners: { 'cached-card': [{ id: 'private-friend' }] },
+      }),
+    ],
+    ['gc_v11_/api/cards?page=3', '{invalid'],
+    [
+      'other_private_cache',
+      JSON.stringify({
+        cards: [{ id: 'ignored', wikipedia_title: 'Ignored', rarity: 'C' }],
+      }),
+    ],
+  ])
+  const context = {
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    IntersectionObserver: class {},
+    location: { pathname: '/global-collection' },
+    sessionStorage: {
+      length: pages.size,
+      key: index => [...pages.keys()][index],
+      getItem: key => pages.get(key) ?? null,
+    },
+    AbortSignal,
+    fetch: async () => json({ cards: [] }),
+  }
+  await expose(
+    'content/prices',
+    ['hydrateRoute', 'resolveVisibleCard'],
+    context,
+  )
+  await context.hydrateRoute()
+  const card = context.resolveVisibleCard('Cached title', 'R')
+  assert.equal(card.id, 'cached-card')
+  assert.equal(card.copyId, null)
+  assert.equal(card.ownerId, undefined)
+  assert.equal(context.resolveVisibleCard('Ignored', 'C'), null)
+})
+
 test('an interrupted index resumes saved pages, includes all copies and survives reload', async () => {
   const stored = new Map()
   const pages = []

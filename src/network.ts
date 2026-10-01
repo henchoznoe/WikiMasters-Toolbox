@@ -93,7 +93,17 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
   }
   let kind: string | null = null
   let raw: unknown[] = []
-  if (url.pathname === '/api/my-collection' && Array.isArray(data.collection)) {
+  if (
+    url.pathname === '/api/my-collection' &&
+    url.searchParams.has('owned_by') &&
+    Array.isArray(data.collection)
+  ) {
+    kind = 'peer-collection'
+    raw = data.collection
+  } else if (
+    url.pathname === '/api/my-collection' &&
+    Array.isArray(data.collection)
+  ) {
     kind = 'collection'
     raw = data.collection
     const owners = new Set(
@@ -109,6 +119,26 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
       (owners.size === 1 && !owners.has(accountId as string))
     )
       return
+  } else if (url.pathname === '/api/trades' && Array.isArray(data.trades)) {
+    kind = 'trades'
+    raw = data.trades.flatMap(trade =>
+      Array.isArray(trade?.items) ? trade.items : [],
+    )
+  } else if (
+    /^\/api\/profile\/[^/]+\/collection$/.test(url.pathname) &&
+    Array.isArray(data.collection)
+  ) {
+    kind = 'peer-collection'
+    raw = data.collection
+  } else if (url.pathname === '/api/cards' && Array.isArray(data.cards)) {
+    kind = 'catalogue'
+    raw = data.cards
+  } else if (
+    url.pathname === '/api/marketplace' &&
+    Array.isArray(data.auctions)
+  ) {
+    kind = 'market-list'
+    raw = data.auctions
   } else if (/^\/api\/marketplace\/[0-9a-f-]{36}$/i.test(url.pathname)) {
     kind = 'marketplace'
     raw = [data.auction]
@@ -118,7 +148,7 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
   }
   if (kind) {
     const cards = raw
-      .map(row => mapCard(row, kind !== 'marketplace'))
+      .map(row => mapCard(row, kind === 'collection' || kind === 'pack'))
       .filter((card): card is Card => card !== null)
     emit({ kind, cards, accountId })
   }
@@ -132,7 +162,11 @@ function isRelevant(url: URL, method: string): boolean {
         url.pathname === '/rest/v1/rpc/get_my_profile')) ||
     isMutation(url, method) ||
     (url.origin === location.origin &&
-      (url.pathname === '/api/my-collection' ||
+      (url.pathname === '/api/trades' ||
+        /^\/api\/profile\/[^/]+\/collection$/.test(url.pathname) ||
+        url.pathname === '/api/cards' ||
+        url.pathname === '/api/marketplace' ||
+        url.pathname === '/api/my-collection' ||
         url.pathname === '/api/my-collection/stats' ||
         /^\/api\/marketplace\/[0-9a-f-]{36}$/i.test(url.pathname)))
   )
