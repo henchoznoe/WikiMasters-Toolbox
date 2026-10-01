@@ -21,7 +21,7 @@ async function expose(module, names, context = {}) {
 }
 const day = 86400_000
 function harness(fetch) {
-  let now = Date.now()
+  let now = Date.UTC(2026, 0, 15, 12)
   const stored = new Map()
   return {
     stored,
@@ -268,18 +268,24 @@ test('individual sales analyses do not survive an account change during the read
   assert.equal(h.context.readPriceDetail('a').status, 'idle')
 })
 
-test('cached legacy averages remain usable but malformed cache cannot produce a quote', async () => {
+test('cached legacy averages remain usable but malformed or future cache cannot produce a quote', async () => {
   const h = harness(async () => response({}))
+  const fetchedAt = h.context.Date.now()
   h.stored.set(
     'wm_toolbox_price_v1_bad',
-    JSON.stringify({ ok: true, fetchedAt: Date.now(), averages: { R: -8 } }),
+    JSON.stringify({ ok: true, fetchedAt, averages: { R: -8 } }),
   )
   h.stored.set(
     'wm_toolbox_price_v1_good',
-    JSON.stringify({ ok: true, fetchedAt: Date.now(), averages: { C: 0 } }),
+    JSON.stringify({ ok: true, fetchedAt, averages: { C: 0 } }),
+  )
+  h.stored.set(
+    'wm_toolbox_price_v1_future',
+    JSON.stringify({ ok: true, fetchedAt: fetchedAt + 1, averages: { C: 1 } }),
   )
   await expose('price-store', ['readPriceQuote'], h.context)
   assert.equal(h.context.readPriceQuote('bad', 'R').status, 'loading')
+  assert.equal(h.context.readPriceQuote('future', 'C').status, 'loading')
   assert.equal(h.context.readPriceQuote('good', 'C').average, 0)
   assert.equal(h.context.readPriceQuote('good', null).status, 'unknown-rarity')
 })
