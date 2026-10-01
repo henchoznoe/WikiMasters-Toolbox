@@ -54,11 +54,13 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 
 ## 3. Collection, sélection et défausse
 
-- [ ] **COL-01 · P0 · D3 — Sélection par rareté sur toute la collection.** Choisir une ou plusieurs raretés avec un total exact, y compris les pages non visibles, puis ajouter ou retirer des cartes individuelles.
-- [ ] **COL-02 · P0 · D4 — Défausser toutes les cartes d'une rareté.** Préparer la sélection, afficher un aperçu par rareté et nombre de copies, puis utiliser le parcours de défausse confirmé par le jeu. **À valider :** action native disponible, limites et comportement des copies.
-- [ ] **COL-03 · P0 · D3 — Protéger les cartes à conserver.** Exclure par défaut favoris, cartes étiquetées, cartes en vente/échange et exemplaire unique ; permettre d'ajuster chaque exclusion avant la confirmation.
-- [ ] **COL-04 · P0 · D3 — Règle « garder N copies ».** Sur une défausse ou une sélection de doublons, conserver au minimum un nombre choisi par carte et montrer les quantités avant/après.
-- [ ] **COL-05 · P0 · D3 — Exécution contrôlée d'une action groupée.** Afficher progression, erreurs par copie, arrêt, bilan et resynchronisation ; ne pas réessayer silencieusement une action dont le résultat est incertain. **À valider :** règles du jeu pour les actions en lot.
+**COL-01 à COL-05 implémentés le 1er octobre 2026.** Sélection sur l’index complet, protections réglables, conservation par variante, aperçu avec quantités avant/après, confirmation et exécution séquentielle avec arrêt et bilan. Fonds de rareté partagés avec `/pulls`. Les contrôles sont couverts par les tests ; sélection et aperçu vérifiés dans Chrome. Défausse native confirmée avec succès, bilan restauré après rechargement et index resynchronisé. Les protections sont revérifiées avant l’exécution, sans réservation atomique côté serveur.
+
+- [x] **COL-01 · P0 · D3 — Sélection par rareté sur toute la collection.** Choisir une ou plusieurs raretés avec un total exact, y compris les pages non visibles, puis ajouter ou retirer des cartes individuelles.
+- [x] **COL-02 · P0 · D4 — Défausser toutes les cartes d'une rareté.** Préparer la sélection, afficher un aperçu par rareté et nombre de copies, puis utiliser le parcours de défausse confirmé par le jeu. API native validée dans le code du jeu ; une copie identifiée par requête, sans dépendre d’une limite de lot non documentée.
+- [x] **COL-03 · P0 · D3 — Protéger les cartes à conserver.** Exclure par défaut favoris, cartes étiquetées, cartes en vente/échange et exemplaire unique ; permettre d'ajuster chaque exclusion avant la confirmation.
+- [x] **COL-04 · P0 · D3 — Règle « garder N copies ».** Sur une défausse ou une sélection de doublons, conserver au minimum un nombre choisi par carte et montrer les quantités avant/après.
+- [x] **COL-05 · P0 · D3 — Exécution contrôlée d'une action groupée.** Afficher progression, erreurs par copie, arrêt, bilan et resynchronisation ; ne pas réessayer silencieusement une action dont le résultat est incertain. Utilise la défausse native avec contrôle des réponses, verrou entre onglets et journal par compte.
 - [ ] **COL-06 · P1 · D3 — Filtres combinables.** Rareté, étiquette, favori, doublon, prix connu, fourchette de prix, catégorie, ATK/DEF et cartes sans image, appliqués à l'index complet.
 - [ ] **COL-07 · P1 · D2 — Sélection enregistrable.** Sauver une requête de filtres comme vue personnelle, avec un nom et une date de synchronisation plutôt qu'une liste figée d'IDs.
 - [ ] **COL-08 · P1 · D2 — Mode compact.** Afficher davantage de cartes par ligne dans collection et collection globale sans rendre titre, rareté, prix ou actions illisibles.

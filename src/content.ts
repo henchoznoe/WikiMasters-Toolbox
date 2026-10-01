@@ -7,6 +7,10 @@ import {
   refreshCollectionIfNeeded,
   syncCollectionFromStorage,
 } from './content/collection'
+import {
+  onSelectionChange,
+  setDiscardRefreshCallback,
+} from './content/collection-actions'
 import { renderCollectionPanel } from './content/collection-panel'
 import {
   AUTO_KEY,
@@ -53,6 +57,10 @@ function scheduleRender(): void {
   }, 80)
 }
 setPriceRenderCallback(scheduleRender)
+onSelectionChange(scheduleRender)
+setDiscardRefreshCallback(() => {
+  if (/^\/collection(\/|$)/.test(location.pathname)) location.reload()
+})
 onCollectionChange(() => {
   registerCards([...getCollectionState().cards])
   scheduleRender()

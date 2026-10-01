@@ -1,3 +1,4 @@
+import { cancelDiscard, leaveCollection } from './collection-actions'
 import { clearOpenAllConfirmation, leavePacksPage } from './packs'
 import { createPacksBody, mountPacksBody } from './packs-panel'
 import type { ToolboxPage } from './panel'
@@ -9,6 +10,8 @@ export const toolboxPages: readonly ToolboxPage[] = [
     matches: path => /^\/collection(\/|$)/.test(path),
     createBody: createCollectionBody,
     onMount: mountCollectionBody,
+    onHide: cancelDiscard,
+    onUnmount: leaveCollection,
   },
   {
     id: 'packs',
