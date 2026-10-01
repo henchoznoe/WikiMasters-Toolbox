@@ -1,3 +1,5 @@
+import { cardVariantKey, mapCard } from '../cards'
+import { getAccountId, setAccountId } from './account'
 import { type Card, createToolboxRoot, normalizeTitle } from './shared'
 
 type PriceEntry = {
@@ -10,8 +12,9 @@ type PriceEntry = {
 const PRICE_TTL = 24 * 60 * 60 * 1000
 const ERROR_TTL = 60 * 1000
 const PRICE_PREFIX = 'wm_toolbox_price_v1_'
-const cardsById = new Map<string, Card>()
-const idsByTitle = new Map<string, string>()
+const cardsByVariant = new Map<string, Card>()
+const variantsByTitle = new Map<string, Set<string>>()
+let marketplaceCard: Card | null = null
 const prices = new Map<string, PriceEntry>()
 const priceQueue: string[] = []
 const queuedPrices = new Set<string>()
@@ -23,12 +26,45 @@ export function setPriceRenderCallback(callback: () => void): void {
   requestRender = callback
 }
 
-export function registerCards(cards: Card[]): void {
+export function registerCards(cards: Card[], kind?: string): void {
+  if (kind === 'marketplace')
+    marketplaceCard = cards.length === 1 ? cards[0] : null
   for (const card of cards) {
-    cardsById.set(card.id, card)
-    idsByTitle.set(normalizeTitle(card.title), card.id)
+    const key = cardVariantKey(card)
+    cardsByVariant.set(key, card)
+    const title = normalizeTitle(card.title)
+    const variants = variantsByTitle.get(title) ?? new Set<string>()
+    variants.add(key)
+    variantsByTitle.set(title, variants)
   }
   requestRender()
+}
+
+export function resetRegisteredCards(): void {
+  cardsByVariant.clear()
+  variantsByTitle.clear()
+  marketplaceCard = null
+  for (const host of document.querySelectorAll(
+    '[data-wm-toolbox-price], [data-wm-toolbox-marketplace]',
+  ))
+    host.remove()
+}
+
+export function resolveVisibleCard(
+  title: string | null,
+  rarity: string | null,
+): Card | null {
+  const candidates = [
+    ...(variantsByTitle.get(normalizeTitle(title)) ?? []),
+  ].flatMap(key => {
+    const card = cardsByVariant.get(key)
+    return card && (!rarity || card.rarity === rarity) ? [card] : []
+  })
+  // Display-only fallback for DOM without IDs; ambiguity must never pick the last title seen.
+  if (new Set(candidates.map(card => card.id)).size !== 1) return null
+  if (!rarity && new Set(candidates.map(card => card.rarity)).size > 1)
+    return null
+  return candidates[0] ?? null
 }
 
 function readCachedPrice(id: string): PriceEntry | null {
@@ -199,7 +235,8 @@ function getCardElement(heading: Element): HTMLElement | null {
   )
 }
 
-function renderBadge(card: HTMLElement, id: string): void {
+function renderBadge(card: HTMLElement, identity: Card): void {
+  const { id, rarity } = identity
   const heading = card.querySelector('h3')
   if (!heading?.parentElement) return
   const onCollection = /^\/collection(\/|$)/.test(location.pathname)
@@ -226,10 +263,8 @@ function renderBadge(card: HTMLElement, id: string): void {
   }
   const badge = host.shadowRoot?.firstElementChild as HTMLElement | null
   if (!badge) return
-  const quote = readPriceQuote(
-    id,
-    cardsById.get(id)?.rarity || rarityFromElement(card),
-  )
+  host.dataset.wmToolboxPrice = id
+  const quote = readPriceQuote(id, rarity)
   updatePriceBadge(badge, quote)
   if (quote.status === 'loading') {
     visiblePriceObserver.observe(card)
@@ -313,23 +348,32 @@ async function loadPrice(id: string): Promise<void> {
 export function renderCards(): void {
   if (!/^\/(collection|pulls)(\/|$)/.test(location.pathname)) return
   for (const heading of document.querySelectorAll('h3')) {
-    const id = idsByTitle.get(normalizeTitle(heading.textContent))
-    if (!id) continue
     const card = getCardElement(heading)
     if (!card) continue
-    card.dataset.wmToolboxCardId = id
-    renderBadge(card, id)
+    const identity = resolveVisibleCard(
+      heading.textContent,
+      rarityFromElement(card),
+    )
+    if (!identity) {
+      delete card.dataset.wmToolboxCardId
+      card.querySelector('[data-wm-toolbox-price]')?.remove()
+      continue
+    }
+    card.dataset.wmToolboxCardId = identity.id
+    renderBadge(card, identity)
   }
 }
 
 export function renderMarketplace(): void {
   if (!/^\/marketplace\/[0-9a-f-]{36}\/?$/i.test(location.pathname)) return
-  const heading = [...document.querySelectorAll('h1')].find(element =>
-    idsByTitle.has(normalizeTitle(element.textContent)),
+  const identity = marketplaceCard
+  if (!identity) return
+  const heading = [...document.querySelectorAll('h1')].find(
+    element =>
+      normalizeTitle(identity.title) === normalizeTitle(element.textContent),
   )
   if (!heading) return
-  const id = idsByTitle.get(normalizeTitle(heading.textContent))
-  if (!id) return
+  const { id, rarity } = identity
   let host = document.querySelector<HTMLElement>(
     '[data-wm-toolbox-marketplace]',
   )
@@ -341,13 +385,15 @@ export function renderMarketplace(): void {
   }
   const badge = host.shadowRoot?.firstElementChild as HTMLElement | null
   if (!badge) return
-  const quote = readPriceQuote(id, cardsById.get(id)?.rarity || null)
+  const quote = readPriceQuote(id, rarity)
   updatePriceBadge(badge, quote)
   if (quote.status === 'loading') enqueuePrice(id)
 }
 
 export async function hydrateRoute(): Promise<void> {
   const path = location.pathname
+  const expectedAccount = getAccountId()
+  marketplaceCard = null
   let url: string | null = null
   if (/^\/collection(\/|$)/.test(path))
     url = '/api/my-collection?sort=rarity&page=0&stats=0'
@@ -361,40 +407,23 @@ export async function hydrateRoute(): Promise<void> {
     })
     if (!response.ok) return
     const json = (await response.json()) as Record<string, unknown>
+    if (location.pathname !== path) return
+    if (expectedAccount && getAccountId() !== expectedAccount) return
     if (Array.isArray(json.collection)) {
+      const owner = json.collection.find(
+        row =>
+          row && typeof row === 'object' && typeof row.user_id === 'string',
+      )?.user_id
+      if (owner && getAccountId() && owner !== getAccountId()) return
+      if (owner) setAccountId(owner)
       registerCards(
         json.collection
-          .map(row => {
-            if (!row || typeof row !== 'object') return null
-            const entry = row as {
-              card_id?: string
-              card?: { id?: string; wikipedia_title?: string; rarity?: string }
-            }
-            const id = entry.card_id || entry.card?.id
-            const title = entry.card?.wikipedia_title
-            return id && title
-              ? { id, title, rarity: entry.card?.rarity || null }
-              : null
-          })
+          .map(row => mapCard(row, true))
           .filter((card): card is Card => card !== null),
       )
     } else if (json.auction && typeof json.auction === 'object') {
-      const auctionData = json.auction as {
-        card_id?: string
-        snapshot_rarity?: string
-        card?: { id?: string; wikipedia_title?: string; rarity?: string }
-      }
-      const id = auctionData.card_id || auctionData.card?.id
-      const title = auctionData.card?.wikipedia_title
-      if (id && title)
-        registerCards([
-          {
-            id,
-            title,
-            rarity:
-              auctionData.snapshot_rarity || auctionData.card?.rarity || null,
-          },
-        ])
+      const card = mapCard(json.auction)
+      if (card) registerCards([card], 'marketplace')
     }
   } catch (error) {
     console.debug('[WikiMasters Toolbox] page data unavailable', error)

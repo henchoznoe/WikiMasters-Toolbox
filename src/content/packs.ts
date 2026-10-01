@@ -1,4 +1,5 @@
 import { getAccountId } from './account'
+import { invalidateCollection } from './collection'
 import { captureRunCards, type RunCard, saveRunSummary } from './run-summary'
 import { recordPack } from './stats'
 
@@ -346,6 +347,7 @@ export async function openAvailablePacks(
       throw new Error('The game returned a pack without cards')
     }
     openedThisCycle += 1
+    invalidateCollection()
     onPackOpened?.(captureRunCards(response.cards, openedThisCycle))
     const reportedRemaining = Number(response.packs_remaining)
     remaining = Number.isFinite(reportedRemaining)

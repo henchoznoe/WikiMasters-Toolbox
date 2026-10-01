@@ -44,15 +44,18 @@ export function captureRunCards(cards: unknown[], pack: number): RunCard[] {
       entry.card && typeof entry.card === 'object'
         ? (entry.card as Record<string, unknown>)
         : entry
+    const identity = mapCard(value, true)
     return {
-      id: limitedString(entry.card_id) || limitedString(nested.id),
+      id: identity?.id ?? null,
       title:
         limitedString(nested.wikipedia_title) ||
         limitedString(nested.title) ||
         limitedString(entry.wikipedia_title) ||
         'Unknown card',
       rarity:
-        limitedString(entry.snapshot_rarity) || limitedString(nested.rarity),
+        identity?.rarity ??
+        limitedString(entry.snapshot_rarity) ??
+        limitedString(nested.rarity),
       pack,
     }
   })
@@ -274,3 +277,5 @@ export function renderRunSummary(): void {
     : `0/${summary.cards.length} priced`
   if (total.textContent !== next) total.textContent = next
 }
+
+import { mapCard } from '../cards'
