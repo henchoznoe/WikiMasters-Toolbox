@@ -1,5 +1,9 @@
 import { readFile } from 'node:fs/promises'
 
+const verifyOnly = process.argv.includes('--verify')
+if (process.argv.slice(2).some(argument => argument !== '--verify'))
+  throw new Error('Usage: node scripts/publish-chrome.mjs [--verify]')
+
 const required = [
   'CWS_CLIENT_ID',
   'CWS_CLIENT_SECRET',
@@ -11,15 +15,6 @@ const missing = required.filter(key => !process.env[key])
 if (missing.length)
   throw new Error(`Missing Chrome Web Store credentials: ${missing.join(', ')}`)
 
-const manifest = JSON.parse(
-  await readFile(new URL('../dist/manifest.json', import.meta.url), 'utf8'),
-)
-const zip = await readFile(
-  new URL(
-    `../artifacts/wikimasters-toolbox-${manifest.version}.zip`,
-    import.meta.url,
-  ),
-)
 const publisher = encodeURIComponent(process.env.CWS_PUBLISHER_ID)
 const extension = encodeURIComponent(process.env.CWS_EXTENSION_ID)
 const item = `publishers/${publisher}/items/${extension}`
@@ -57,6 +52,26 @@ if (!token.access_token)
   throw new Error('OAuth token response did not include an access token.')
 
 const headers = { authorization: `Bearer ${token.access_token}` }
+if (verifyOnly) {
+  const status = await request(
+    `https://chromewebstore.googleapis.com/v2/${item}:fetchStatus`,
+    { headers },
+  )
+  if (status.itemId !== process.env.CWS_EXTENSION_ID)
+    throw new Error('Chrome Web Store returned an unexpected extension ID.')
+  console.log(`Chrome Web Store access verified for ${status.itemId}.`)
+  process.exit(0)
+}
+
+const manifest = JSON.parse(
+  await readFile(new URL('../dist/manifest.json', import.meta.url), 'utf8'),
+)
+const zip = await readFile(
+  new URL(
+    `../artifacts/wikimasters-toolbox-${manifest.version}.zip`,
+    import.meta.url,
+  ),
+)
 const upload = await request(
   `https://chromewebstore.googleapis.com/upload/v2/${item}:upload`,
   {
