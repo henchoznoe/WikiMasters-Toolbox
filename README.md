@@ -50,7 +50,9 @@ Pack statistics count cards by rarity and packs opened through the game's normal
 
 ## Releases
 
-Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) (`feat:`, `fix:`, `docs:`, etc.). CI checks every PR and pushes to `develop` and `main`. On `main`, semantic-release calculates the next semantic version, updates `package.json` and `manifest.json`, packages the extension, creates a Git tag, and attaches the ZIP to a GitHub Release.
+Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) (`feat:`, `fix:`, `docs:`, etc.). CI checks every PR and pushes to `develop` and `main`. On `main`, semantic-release calculates the next semantic version from the Git tags and commits, updates `package.json` and `manifest.json` in the release workspace, packages the extension, creates a Git tag, and attaches the ZIP to a GitHub Release. It does not push a version commit to `main`. The GitHub Release and packaged manifest identify the published version; tracked version fields remain development metadata. The Chrome publication workflow checks out the release tag and applies its version before rebuilding the package.
+
+Protect `main` by requiring a pull request, the GitHub Actions `check` status with an up-to-date branch, and resolved review conversations. Enforce these rules for administrators, block force pushes and branch deletion, and require zero external approvals while there is only one maintainer. Keep merge commits available to preserve Conventional Commits. The release workflow uses `GITHUB_TOKEN` to create tags and releases without pushing commits to the protected branch, so it needs no branch-protection bypass or additional token. Only the CI check belongs in the required checks; release and Store publication run after the merge.
 
 Chrome Web Store publication is prepared through the [Chrome Web Store API v2](https://developer.chrome.com/docs/webstore/using-api). Initial setup is required:
 
