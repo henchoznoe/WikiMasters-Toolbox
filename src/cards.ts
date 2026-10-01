@@ -47,6 +47,16 @@ export function mapOwnedCard(raw: unknown): OwnedCard | null {
   const ownerId = nonemptyString(entry.user_id)
   // A grouped catalogue row is not a list of identified copies.
   if (!ownerId || (entry.count !== undefined && entry.count !== 1)) return null
+  // Actions must not interpret missing protection metadata as an unprotected copy.
+  if (
+    typeof entry.starred !== 'boolean' ||
+    typeof entry.is_shiny !== 'boolean' ||
+    !Array.isArray(entry.tags) ||
+    entry.tags.some(
+      tag => !tag || typeof tag !== 'object' || !nonemptyString(tag.id),
+    )
+  )
+    return null
   return {
     ...card,
     copyId: card.copyId,

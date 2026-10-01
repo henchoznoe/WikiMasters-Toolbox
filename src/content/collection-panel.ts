@@ -4,7 +4,12 @@ import {
   loadCollection,
   stopCollectionLoad,
 } from './collection'
+import { getSelectionState } from './collection-actions'
 import { registerCards } from './prices'
+import {
+  createSelectionControls,
+  renderSelectionPanel,
+} from './selection-panel'
 
 export function createCollectionBody(): HTMLElement {
   const body = document.createElement('div')
@@ -42,7 +47,7 @@ export function createCollectionBody(): HTMLElement {
   const note = document.createElement('p')
   note.className = 'wm-note'
   note.dataset.wmCollectionNote = '1'
-  body.append(summary, progress, actions, note)
+  body.append(summary, progress, actions, note, createSelectionControls())
   return body
 }
 
@@ -87,9 +92,12 @@ export function renderCollectionPanel(): void {
       : complete
         ? 'Refresh'
         : 'Load collection'
-  load.disabled = !account
+  const actionBusy = ['checking', 'verifying', 'running'].includes(
+    getSelectionState().phase,
+  )
+  load.disabled = !account || (actionBusy && !loading)
   fresh.hidden = !resumable
-  fresh.disabled = loading || !account
+  fresh.disabled = loading || !account || actionBusy
   note.textContent =
     state.error ??
     (state.retrying ? '…' : !state.persistent ? 'Not saved locally.' : '')
@@ -97,6 +105,7 @@ export function renderCollectionPanel(): void {
     ? 'The game is busy; retrying the current page.'
     : (state.error ?? '')
   note.hidden = !note.textContent
+  renderSelectionPanel()
 }
 
 export function mountCollectionBody(): void {

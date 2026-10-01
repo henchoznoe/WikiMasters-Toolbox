@@ -37,6 +37,7 @@ let error: string | null = null
 let persistent = true
 let retrying = false
 let controller: AbortController | null = null
+let activeLoad: Promise<void> | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 const listeners = new Set<() => void>()
 
@@ -90,6 +91,7 @@ function validStoredCopy(value: unknown, owner: string): value is OwnedCard {
 function restore(): void {
   controller?.abort()
   controller = null
+  activeLoad = null
   if (refreshTimer) clearTimeout(refreshTimer)
   refreshTimer = null
   error = null
@@ -199,7 +201,7 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
     signal.addEventListener('abort', stop, { once: true })
   })
 }
-async function readJson(
+export async function readCollectionJson(
   url: string,
   signal: AbortSignal,
 ): Promise<Record<string, unknown>> {
@@ -252,7 +254,7 @@ async function readJson(
   throw new Error('Collection unavailable')
 }
 async function readTotal(signal: AbortSignal): Promise<number> {
-  const json = await readJson('/api/my-collection/stats', signal)
+  const json = await readCollectionJson('/api/my-collection/stats', signal)
   const total =
     json.total === null || json.total === undefined ? NaN : Number(json.total)
   if (!Number.isSafeInteger(total) || total < 0)
@@ -264,7 +266,7 @@ async function readPage(
   owner: string,
   signal: AbortSignal,
 ): Promise<OwnedCard[]> {
-  const json = await readJson(
+  const json = await readCollectionJson(
     `/api/my-collection?sort=added&page=${page}&stats=0`,
     signal,
   )
@@ -277,14 +279,16 @@ async function readPage(
 }
 function fingerprint(cards: readonly OwnedCard[]): string {
   return JSON.stringify(
-    cards.map(card => [
-      card.copyId,
-      card.id,
-      card.rarity,
-      card.shiny,
-      card.starred,
-      card.tagIds,
-    ]),
+    [...cards]
+      .sort((a, b) => a.copyId.localeCompare(b.copyId))
+      .map(card => [
+        card.copyId,
+        card.id,
+        card.rarity,
+        card.shiny,
+        card.starred,
+        [...card.tagIds].sort(),
+      ]),
   )
 }
 
@@ -318,6 +322,7 @@ export function invalidateCollection(): void {
   const enabled = snapshot?.enabled ?? false
   controller?.abort(new Error('Collection changed'))
   controller = null
+  activeLoad = null
   snapshot = emptySnapshot(id, enabled)
   status = 'stale'
   error = null
@@ -344,7 +349,17 @@ export function syncCollectionFromStorage(key: string | null): void {
   restore()
 }
 
-export async function loadCollection(fresh = false): Promise<void> {
+export function loadCollection(fresh = false): Promise<void> {
+  if (activeLoad) return activeLoad
+  const loading = traverseCollection(fresh)
+  activeLoad = loading
+  void loading.finally(() => {
+    if (activeLoad === loading) activeLoad = null
+  })
+  return loading
+}
+
+async function traverseCollection(fresh: boolean): Promise<void> {
   const id = getAccountId()
   if (!id || controller) return
   if (refreshTimer) clearTimeout(refreshTimer)

@@ -81,6 +81,8 @@ test('identities distinguish catalogue, snapshot rarity and each owned copy', as
   assert.notEqual(context.cardVariantKey(first), context.cardVariantKey(second))
   assert.equal(context.mapOwnedCard({ ...row(0), count: 2 }), null)
   assert.equal(context.mapOwnedCard({ ...row(0), id: null }), null)
+  assert.equal(context.mapOwnedCard({ ...row(0), tags: undefined }), null)
+  assert.equal(context.mapOwnedCard({ ...row(0), starred: undefined }), null)
   assert.equal(
     context.mapCard({ id: 'auction-id', card: row(0).card }).copyId,
     null,
@@ -342,4 +344,21 @@ test('native totals and new possession observations invalidate a completed index
     },
   ])
   assert.equal(context.getCollectionState().status, 'stale')
+})
+
+test('the page boundary check tolerates reordered rows and tags without treating them as changed possessions', async () => {
+  let pageRead = 0
+  const context = await indexContext(async url => {
+    if (url.endsWith('/stats')) return json({ total: 3 })
+    pageRead += 1
+    const cards = [row(0), row(1), row(2)].map(card => ({
+      ...card,
+      tags:
+        pageRead > 1 ? [{ id: 'b' }, { id: 'a' }] : [{ id: 'a' }, { id: 'b' }],
+    }))
+    return json({ collection: pageRead > 1 ? cards.reverse() : cards })
+  })
+  await context.loadCollection()
+  assert.equal(context.getCollectionState().status, 'complete')
+  assert.equal(context.getCollectionState().cards.length, 3)
 })
