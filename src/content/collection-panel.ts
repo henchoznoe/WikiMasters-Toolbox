@@ -5,6 +5,7 @@ import {
   stopCollectionLoad,
 } from './collection'
 import { getSelectionState } from './collection-actions'
+import { createPriceControls } from './price-panel'
 import { registerCards } from './prices'
 import {
   createSelectionControls,
@@ -47,7 +48,14 @@ export function createCollectionBody(): HTMLElement {
   const note = document.createElement('p')
   note.className = 'wm-note'
   note.dataset.wmCollectionNote = '1'
-  body.append(summary, progress, actions, note, createSelectionControls())
+  body.append(
+    summary,
+    progress,
+    actions,
+    note,
+    createSelectionControls(),
+    createPriceControls(),
+  )
   return body
 }
 

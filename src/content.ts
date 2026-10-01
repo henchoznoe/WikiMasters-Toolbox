@@ -23,6 +23,16 @@ import {
 import { refreshPacksControls } from './content/packs-panel'
 import { syncToolboxPanel } from './content/panel'
 import {
+  closePriceInspector,
+  renderPriceInspector,
+} from './content/price-inspector'
+import { renderPricePanel } from './content/price-panel'
+import {
+  cancelPriceBatch,
+  resetPriceAccount,
+  syncPricesFromStorage,
+} from './content/price-store'
+import {
   hydrateRoute,
   registerCards,
   renderCards,
@@ -54,6 +64,8 @@ function scheduleRender(): void {
     syncToolboxPanel(location.pathname, toolboxPages)
     renderRunSummary()
     renderCollectionPanel()
+    renderPricePanel()
+    renderPriceInspector()
   }, 80)
 }
 setPriceRenderCallback(scheduleRender)
@@ -66,7 +78,10 @@ onCollectionChange(() => {
   scheduleRender()
 })
 onAccountChange(() => {
+  resetPriceAccount()
+  closePriceInspector()
   resetRegisteredCards()
+  void hydrateRoute()
   registerCards([...getCollectionState().cards])
   renderStats()
   renderRunSummary()
@@ -111,6 +126,7 @@ if (!contentWindow.__wmToolboxContentInstalled) {
   })
   window.addEventListener('storage', event => {
     syncCollectionFromStorage(event.key)
+    syncPricesFromStorage(event.key)
     if (event.key === `${STATS_PREFIX}${getAccountId()}`) {
       renderStats()
       scheduleDailyReset()
@@ -128,6 +144,8 @@ if (!contentWindow.__wmToolboxContentInstalled) {
   let previousPath = location.pathname
   const observer = new MutationObserver(() => {
     if (location.pathname !== previousPath) {
+      cancelPriceBatch()
+      closePriceInspector()
       previousPath = location.pathname
       void hydrateRoute()
       if (/^\/collection(\/|$)/.test(previousPath))
