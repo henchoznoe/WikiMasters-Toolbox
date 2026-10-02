@@ -8,6 +8,8 @@ import {
   readCollectionJson,
   stopCollectionLoad,
 } from './collection'
+import { collectionCompatible, onCompatibilityChange } from './compatibility'
+import { requestWrite } from './requests'
 import {
   buildSelection,
   type Commitments,
@@ -319,6 +321,14 @@ onAccountChange(() => {
   restoreRun()
   notify()
 })
+onCompatibilityChange(() => {
+  if (collectionCompatible()) return
+  checkedAt = 0
+  clearReview()
+  if (state.phase === 'running' || state.phase === 'verifying')
+    state.stop = true
+  notify()
+})
 onCollectionChange(() => {
   checkedAt = 0
   // A native mutation or another tab's refresh during execution stops subsequent writes.
@@ -452,14 +462,16 @@ export async function executeDiscard(): Promise<void> {
           const timeout = new AbortController()
           const timer = setTimeout(() => timeout.abort(), 20_000)
           try {
-            const response = await fetch('/api/user-cards/bulk-discard', {
-              method: 'POST',
-              credentials: 'include',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ card_ids: [card.copyId] }),
-              signal: timeout.signal,
-            })
-            const json: unknown = await response.json()
+            const { response, json } = await requestWrite(
+              '/api/user-cards/bulk-discard',
+              timeout.signal,
+              {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ card_ids: [card.copyId] }),
+              },
+            )
             const outcome = response.ok
               ? parseDiscardResult(json)
               : {

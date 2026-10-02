@@ -17,6 +17,7 @@ async function expose(path, names, context, extra = '') {
     write: false,
     define: { WM_TOOLBOX_CSS: '""' },
   })
+  Object.assign(context, { AbortController, AbortSignal, URL })
   vm.runInNewContext(result.outputFiles[0].text, context)
 }
 function row(index, owner = A) {
@@ -218,7 +219,7 @@ test('an interrupted index resumes saved pages, includes all copies and survives
   assert.equal(restored.getCollectionState().cards.length, 53)
 })
 
-test('busy servers retry only a bounded number of times and preserve valid pages', async () => {
+test('busy servers pause shared reads and preserve valid pages', async () => {
   let failures = 0
   const context = await indexContext(
     async url => {
@@ -233,12 +234,12 @@ test('busy servers retry only a bounded number of times and preserve valid pages
     new Map(),
     {
       setTimeout: (callback, ms) =>
-        ms === 15_000 ? 1 : setTimeout(callback, 0),
+        ms === 12_000 ? 1 : setTimeout(callback, 0),
       clearTimeout: id => clearTimeout(id),
     },
   )
   await context.loadCollection()
-  assert.equal(failures, 3)
+  assert.equal(failures, 1)
   assert.equal(context.getCollectionState().status, 'error')
   assert.equal(context.getCollectionState().pages, 1)
   assert.equal(context.getCollectionState().cards.length, 50)

@@ -1,9 +1,11 @@
+import { createDataControls } from './data-panel'
 import { createToolboxRoot } from './shared'
 
 export type ToolboxPage = {
   id: string
   label: string
   matches: (path: string) => boolean
+  read?: () => Promise<void>
   createBody: () => HTMLElement
   onMount?: () => void
   onHide?: () => void
@@ -96,8 +98,15 @@ export function syncToolboxPanel(
     disclosure.textContent = expanded ? 'Hide' : 'Show'
   })
   header.append(title, mark, disclosure)
-  panel.append(header, page.createBody())
+  const body = page.createBody()
+  body.append(createDataControls())
+  panel.append(header, body)
   createToolboxRoot(host).append(panel)
   document.body.append(host)
   page.onMount?.()
+}
+
+export function resetToolboxPanel(): void {
+  document.querySelector('[data-wm-toolbox-panel]')?.remove()
+  activePage = null
 }

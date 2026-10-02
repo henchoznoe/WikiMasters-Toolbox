@@ -26,6 +26,7 @@ async function exposeModule(module, names, context, extra = '') {
     write: false,
     define: { WM_TOOLBOX_CSS: '""' },
   })
+  Object.assign(context, { AbortController, AbortSignal, URL })
   vm.runInNewContext(result.outputFiles[0].text, context)
 }
 
@@ -323,7 +324,9 @@ test('manual bulk opening refreshes the game after every available pack is opene
   const stats = JSON.parse(stored.get(`wm_toolbox_pack_stats_v2:${ACCOUNT_A}`))
   assert.equal(stats.packs, 3)
   assert.equal(stats.counts.R, 3)
-  const summary = JSON.parse(stored.get('session:wm_toolbox_last_pack_run_v1'))
+  const summary = JSON.parse(
+    stored.get(`session:wm_toolbox_last_pack_run_v2:${ACCOUNT_A}`),
+  )
   assert.equal(summary.opened, 3)
   assert.equal(summary.detail, 'No packs remain.')
   assert.equal(summary.cards.length, 3)
@@ -388,7 +391,8 @@ test('a manual pack limit stops without requesting an extra pack', async () => {
     },
     Response,
     AbortController,
-    setTimeout: callback => {
+    setTimeout: (callback, ms) => {
+      if (ms === 12_000) return 2
       queueMicrotask(callback)
       return 1
     },
@@ -411,7 +415,9 @@ test('a manual pack limit stops without requesting an extra pack', async () => {
     JSON.parse(stored.get(`wm_toolbox_pack_stats_v2:${ACCOUNT_A}`)).packs,
     2,
   )
-  const summary = JSON.parse(stored.get('session:wm_toolbox_last_pack_run_v1'))
+  const summary = JSON.parse(
+    stored.get(`session:wm_toolbox_last_pack_run_v2:${ACCOUNT_A}`),
+  )
   assert.equal(summary.opened, 2)
   assert.equal(summary.detail, 'Reached your 2-pack limit.')
   assert.equal(summary.cards.length, 2)
@@ -563,7 +569,9 @@ test('two due tabs share one automatic run and one next schedule', async () => {
     maxMinutes: 1,
     nextAt: Date.now() - 1_000,
   }
-  const stored = new Map([['wm_toolbox_auto_v1', JSON.stringify(initial)]])
+  const stored = new Map([
+    [`wm_toolbox_auto_v2:${ACCOUNT_A}`, JSON.stringify(initial)],
+  ])
   const autoWrites = []
   const held = new Set()
   const locks = {
@@ -593,12 +601,16 @@ test('two due tabs share one automatic run and one next schedule', async () => {
       getItem: key => stored.get(key) || null,
       setItem: (key, value) => {
         stored.set(key, value)
-        if (key === 'wm_toolbox_auto_v1') autoWrites.push(JSON.parse(value))
+        if (key === `wm_toolbox_auto_v2:${ACCOUNT_A}`)
+          autoWrites.push(JSON.parse(value))
       },
     },
     sessionStorage: {
       getItem: () => null,
-      setItem: (_key, value) => summaries.push(JSON.parse(value)),
+      setItem: (key, value) => {
+        if (key.startsWith('wm_toolbox_last_pack_run_v2:'))
+          summaries.push(JSON.parse(value))
+      },
     },
     navigator: { locks },
     fetch: async () => {
@@ -704,7 +716,7 @@ test('pack statistics stay with the account that opened the packs', async () => 
     "import { setAccountId } from './src/content/account.ts'; globalThis.setAccountId = setAccountId",
   )
   context.setAccountId(ACCOUNT_A)
-  assert.equal(context.readStats().dailyReset, true)
+  assert.equal(context.readStats().dailyReset, false)
   await context.recordPack([{ rarity: 'R' }])
   context.setAccountId(ACCOUNT_B)
   assert.equal(context.readStats().packs, 0)
@@ -720,6 +732,7 @@ test('pack statistics stay with the account that opened the packs', async () => 
 
 test('temporary game rate limits pause and retry pack opening', async () => {
   let requests = 0
+  let now = Date.now()
   const context = {
     window: { addEventListener() {} },
     document: { body: null, querySelector: () => null },
@@ -752,10 +765,18 @@ test('temporary game rate limits pause and retry pack opening', async () => {
     Response,
     AbortController,
     AbortSignal,
-    setTimeout,
+    setTimeout: (callback, ms) => {
+      if (ms === 12_000) return 1
+      now += ms
+      return setTimeout(callback, 0)
+    },
     clearTimeout,
     requestAnimationFrame: () => {},
-    Date,
+    Date: class extends Date {
+      static now() {
+        return now
+      }
+    },
     Map,
     Set,
   }
@@ -773,7 +794,7 @@ for (const [mode, beforeChallenge] of [
   test(`${mode} opening pauses for verification after ${beforeChallenge} packs and survives reload`, async () => {
     const stored = new Map([
       [
-        'wm_toolbox_auto_v1',
+        `wm_toolbox_auto_v2:${ACCOUNT_A}`,
         JSON.stringify({
           enabled: mode === 'auto',
           minMinutes: 60,
@@ -863,7 +884,7 @@ for (const [mode, beforeChallenge] of [
     assert.equal(timers.size, 0)
     assert.equal(reloads, 0)
     const summary = JSON.parse(
-      stored.get('session:wm_toolbox_last_pack_run_v1'),
+      stored.get(`session:wm_toolbox_last_pack_run_v2:${ACCOUNT_A}`),
     )
     assert.equal(summary.opened, beforeChallenge)
     assert.equal(summary.cards.length, beforeChallenge)

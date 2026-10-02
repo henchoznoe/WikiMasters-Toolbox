@@ -774,3 +774,18 @@
 .wm-sale-support [hidden], .wm-market-section [hidden] { display: none; }
 .wm-sale-support button:disabled, .wm-market-section button:disabled { opacity: .5; cursor: default; }
 .wm-sale-support :focus-visible, .wm-market-section :focus-visible { outline: 2px solid #79e2b5; outline-offset: 2px; }
+
+.wm-cache-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.wm-cache-date {
+  display: block;
+  color: #64748b;
+  margin-top: 2px;
+}

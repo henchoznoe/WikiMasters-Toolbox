@@ -26,6 +26,8 @@ Every option is designed for a **free WikiMasters account**. Toolbox uses the ga
 
 On the collection page, load the full index and its prices to open **Most expensive**: a paginated ranking with missing prices, individual copies and sale proposals. **Prepare sale** opens the chosen copy in the game's auction form; apply the proposal if desired, check the copy and its protections, then confirm in the native form. Toolbox shows the average, its age and the difference from the entered price. **My sales** gathers active and observed past sales. **Active comparables** searches listings on demand and checks catalogue ID, rarity and shiny status; a partial search is labelled explicitly. Asking prices and averages do not guarantee a final sale price.
 
+Each supported page also offers **Data & caches**: check synchronization dates and cache size, or clear collection data for the current account, shared prices, and local price observations separately. Pack settings and summaries are isolated by account; older shared automatic-opening settings are not inherited. Toolbox pauses affected tools when the game's data or card layout no longer matches its adapters.
+
 ## Installation
 
 Install [WikiMasters Toolbox from the Chrome Web Store](https://chromewebstore.google.com/detail/wikimasters-toolbox/nekkambfdbbmledkjpeagiafncciaalf), then open or reload WikiMasters while signed in. The Toolbox appears directly on supported game pages. Chrome manages updates for the Store installation.

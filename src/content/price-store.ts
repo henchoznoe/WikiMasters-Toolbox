@@ -1,3 +1,4 @@
+import { cachePolicies, onCacheChange, writeCache } from './cache'
 import {
   appendObservation,
   type Observation,
@@ -7,10 +8,16 @@ import {
   RETRY_DELAY,
   type Summary,
 } from './price-model'
+import {
+  requestReadData as get,
+  getRequestEpoch,
+  requestLimit as priceRequestLimit,
+  RequestAdmissionError,
+  requestJson,
+} from './requests'
 
 const PREFIX = 'wm_toolbox_price_v1_'
 const HISTORY = 'wm_toolbox_price_history_v1_'
-const MAX_REQUESTS = 200
 const entries = new Map<string, PriceEntry>()
 let notify: () => void = () => {}
 export function setPriceStoreCallback(callback: () => void): void {
@@ -47,7 +54,10 @@ export type PriceQuote =
     }
 
 function readEntry(id: string): PriceEntry | null {
-  if (entries.has(id)) return entries.get(id) ?? null
+  const cached = entries.get(id)
+  if (cached && Date.now() - cached.fetchedAt <= cachePolicies.prices.retention)
+    return cached
+  entries.delete(id)
   try {
     const raw = localStorage.getItem(PREFIX + id)
     const row = raw ? JSON.parse(raw) : null
@@ -62,6 +72,7 @@ function readEntry(id: string): PriceEntry | null {
           row.lastAttempt > 0 &&
           row.lastAttempt <= Date.now())) &&
       row.fetchedAt <= Date.now() &&
+      Date.now() - row.fetchedAt <= cachePolicies.prices.retention &&
       row.averages &&
       typeof row.averages === 'object' &&
       !Array.isArray(row.averages) &&
@@ -74,6 +85,8 @@ function readEntry(id: string): PriceEntry | null {
       )
     ) {
       entries.set(id, row)
+      if (entries.size > 1000)
+        entries.delete(entries.keys().next().value as string)
       return row
     }
   } catch {
@@ -90,7 +103,7 @@ function fresh(row: PriceEntry): boolean {
 export function canRefreshPrice(id: string): boolean {
   const row = readEntry(id)
   return (
-    !jobs.has(`summary:${id}`) &&
+    !pendingPrices.has(id) &&
     (!row || Date.now() - (row.lastAttempt ?? row.fetchedAt) >= RETRY_DELAY) &&
     !priceRequestLimit()
   )
@@ -158,12 +171,10 @@ export function readPriceHistory(id: string, rarity: string): Observation[] {
   }
 }
 function save(id: string, row: PriceEntry): void {
+  entries.delete(id)
   entries.set(id, row)
-  try {
-    localStorage.setItem(PREFIX + id, JSON.stringify(row))
-  } catch {
-    /* Memory cache remains usable. */
-  }
+  if (entries.size > 1000) entries.delete(entries.keys().next().value as string)
+  writeCache('prices', PREFIX + id, row)
   if (row.ok && !row.failed) {
     try {
       const history: Record<string, Observation[]> = {}
@@ -172,14 +183,7 @@ function save(id: string, row: PriceEntry): void {
           at: row.fetchedAt,
           average: row.averages[rarity] ?? null,
         })
-      localStorage.setItem(HISTORY + id, JSON.stringify(history))
-      const index: string[] = JSON.parse(
-        localStorage.getItem(`${HISTORY}index`) ?? '[]',
-      )
-      const next = [...index.filter(key => key !== id), id]
-      for (const key of next.slice(0, Math.max(0, next.length - 300)))
-        localStorage.removeItem(HISTORY + key)
-      localStorage.setItem(`${HISTORY}index`, JSON.stringify(next.slice(-300)))
+      writeCache('history', HISTORY + id, history)
     } catch {
       /* No invented history when persistence fails. */
     }
@@ -187,188 +191,19 @@ function save(id: string, row: PriceEntry): void {
   notify()
 }
 
-type Job = {
-  key: string
-  run: () => Promise<void>
-  resolve: () => void
-  promise: Promise<void>
-}
-const queue: Job[] = []
-const jobs = new Map<string, Job>()
-let running = false
-let nextStart = 0
-let cooldown = 0
-let requests: number[] = []
-try {
-  const budget = JSON.parse(
-    sessionStorage.getItem('wm_toolbox_price_budget_v1') ?? '{}',
-  )
-  if (Array.isArray(budget.requests))
-    requests = budget.requests.filter(
-      (at: unknown): at is number =>
-        typeof at === 'number' &&
-        Number.isFinite(at) &&
-        at <= Date.now() &&
-        at > Date.now() - 3600_000,
-    )
-  if (typeof budget.cooldown === 'number' && Number.isFinite(budget.cooldown))
-    cooldown = Math.min(budget.cooldown, Date.now() + 300_000)
-} catch {
-  /* A per-page budget remains available without session storage. */
-}
-function saveBudget(): void {
-  try {
-    sessionStorage.setItem(
-      'wm_toolbox_price_budget_v1',
-      JSON.stringify({ requests, cooldown }),
-    )
-  } catch {
-    /* Storage unavailable. */
-  }
-}
-let timer: ReturnType<typeof setTimeout> | null = null
-export function priceRequestLimit(): string {
-  const now = Date.now()
-  requests = requests.filter(at => at > now - 3600_000)
-  return cooldown > now
-    ? `Server pause · ${Math.ceil((cooldown - now) / 1000)} s`
-    : requests.length >= MAX_REQUESTS
-      ? '200 requests / hour reached'
-      : ''
-}
-function schedule(key: string, run: () => Promise<void>): Promise<void> {
-  const existing = jobs.get(key)
-  if (existing) return existing.promise
-  if (queue.length >= 200 || priceRequestLimit()) return Promise.resolve()
-  let resolve = () => {}
-  const promise = new Promise<void>(done => {
-    resolve = done
-  })
-  const job = { key, run, resolve, promise }
-  jobs.set(key, job)
-  queue.push(job)
-  pump()
-  return promise
-}
-function pump(): void {
-  if (running || timer || !queue.length) return
-  if (priceRequestLimit()) {
-    for (const job of queue.splice(0)) {
-      jobs.delete(job.key)
-      job.resolve()
-    }
-    notify()
-    return
-  }
-  const wait = Math.max(0, nextStart - Date.now())
-  if (wait) {
-    timer = setTimeout(() => {
-      timer = null
-      pump()
-    }, wait)
-    return
-  }
-  const job = queue.shift()
-  if (!job) return
-  running = true
-  requests.push(Date.now())
-  saveBudget()
-  nextStart = Date.now() + 650
-  void job
-    .run()
-    .catch(() => {})
-    .finally(() => {
-      jobs.delete(job.key)
-      running = false
-      job.resolve()
-      notify()
-      pump()
-    })
-}
-async function get(url: string, signal?: AbortSignal): Promise<Response> {
-  let response: Response
-  if (!signal)
-    response = await fetch(url, {
-      credentials: 'include',
-      signal: AbortSignal.timeout(12_000),
-    })
-  else {
-    const request = new AbortController()
-    const abort = (): void => request.abort()
-    if (signal?.aborted) request.abort()
-    signal?.addEventListener('abort', abort, { once: true })
-    const timeout = setTimeout(abort, 12_000)
-    try {
-      response = await fetch(url, {
-        credentials: 'include',
-        signal: request.signal,
-      })
-    } finally {
-      clearTimeout(timeout)
-      signal?.removeEventListener('abort', abort)
-    }
-  }
-  if (response.status >= 500) cooldown = Date.now() + 30_000
-  if (response.status === 429) {
-    const seconds = Number(response.headers.get('Retry-After'))
-    cooldown =
-      Date.now() +
-      Math.min(
-        300_000,
-        Math.max(60_000, Number.isFinite(seconds) ? seconds * 1000 : 60_000),
-      )
-  }
-  saveBudget()
-  return response
-}
-
-/** Market reads share the price queue, hourly budget, timeout and server pauses. */
-const marketReads = new Map<string, Promise<Record<string, unknown>>>()
-export async function requestMarketJson(
+export { requestLimit as priceRequestLimit } from './requests'
+export function requestMarketJson(
   url: string,
   signal: AbortSignal,
 ): Promise<Record<string, unknown>> {
-  const existing = marketReads.get(url)
-  if (existing) {
-    const result = await existing
-    if (signal.aborted) throw new Error('Stopped')
-    return result
-  }
-  const reading = readMarketJson(url, signal)
-  marketReads.set(url, reading)
-  try {
-    return await reading
-  } finally {
-    if (marketReads.get(url) === reading) marketReads.delete(url)
-  }
+  return requestJson(url, signal)
 }
-async function readMarketJson(
-  url: string,
-  signal: AbortSignal,
-): Promise<Record<string, unknown>> {
-  let result: Record<string, unknown> | undefined
-  let failure: unknown
-  await schedule(`market:${url}`, async () => {
-    if (signal.aborted) return
-    try {
-      const response = await get(url, signal)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const json: unknown = await response.json()
-      if (!json || typeof json !== 'object' || Array.isArray(json))
-        throw new Error('Invalid market response')
-      result = json as Record<string, unknown>
-    } catch (cause) {
-      failure = cause
-    }
-  })
-  if (signal.aborted) throw new Error('Stopped')
-  if (failure) throw failure
-  if (!result)
-    throw new Error(priceRequestLimit() || 'Read already in progress')
-  return result
-}
+let cacheEpoch = 0
+const pendingPrices = new Map<string, Promise<void>>()
 export function requestPriceQuote(id: string, force = false): Promise<void> {
   if (!id || id.length > 200) return Promise.resolve()
+  const pending = pendingPrices.get(id)
+  if (pending) return pending
   const row = readEntry(id)
   if (
     row &&
@@ -377,22 +212,28 @@ export function requestPriceQuote(id: string, force = false): Promise<void> {
       : fresh(row))
   )
     return Promise.resolve()
-  return schedule(`summary:${id}`, async () => {
+  const cacheVersion = cacheEpoch
+  const reading = (async () => {
     const at = Date.now()
+    const epoch = getRequestEpoch()
     try {
-      const response = await get(
+      const { response, json } = await get(
         `/api/marketplace/cards/${encodeURIComponent(id)}/sales?scope=summary`,
       )
+      if (cacheVersion !== cacheEpoch) return
       if (response.status === 404) {
         save(id, { fetchedAt: at, ok: false, notFound: true, averages: {} })
         return
       }
       if (!response.ok) throw new Error('Price unavailable')
-      const json = await response.json()
-      const averages = parseSummary(json.summary)
+      const averages = parseSummary(
+        (json as Record<string, unknown> | null)?.summary,
+      )
       if (!averages) throw new Error('Invalid summary')
       save(id, { fetchedAt: at, ok: true, averages })
-    } catch {
+    } catch (cause) {
+      if (cause instanceof RequestAdmissionError) return
+      if (getRequestEpoch() !== epoch || cacheVersion !== cacheEpoch) return
       save(
         id,
         row?.ok
@@ -400,7 +241,12 @@ export function requestPriceQuote(id: string, force = false): Promise<void> {
           : { fetchedAt: at, ok: false, averages: {} },
       )
     }
+  })()
+  pendingPrices.set(id, reading)
+  void reading.finally(() => {
+    if (pendingPrices.get(id) === reading) pendingPrices.delete(id)
   })
+  return reading
 }
 
 export type BatchState = {
@@ -474,3 +320,12 @@ export function syncPricesFromStorage(key: string | null): void {
     notify()
   }
 }
+
+onCacheChange(kind => {
+  if (kind === 'prices') {
+    cacheEpoch += 1
+    pendingPrices.clear()
+    entries.clear()
+    notify()
+  }
+})

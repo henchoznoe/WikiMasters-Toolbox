@@ -7,6 +7,7 @@ import {
 import { cancelMarketReads } from './market-store'
 import { clearOpenAllConfirmation, leavePacksPage } from './packs'
 import { createPacksBody, mountPacksBody } from './packs-panel'
+import { resolvePageAdapter } from './page-adapters'
 import type { ToolboxPage } from './panel'
 import {
   createPriceControls,
@@ -14,13 +15,15 @@ import {
   renderPricePanel,
 } from './price-panel'
 import { cancelPriceBatch } from './price-store'
+import { hydrateRoute } from './prices'
 import { leaveMarket } from './sale'
 
 export const toolboxPages: readonly ToolboxPage[] = [
   {
     id: 'collection',
     label: 'Collection',
-    matches: path => /^\/collection(\/|$)/.test(path),
+    matches: path => resolvePageAdapter(path)?.id === 'collection',
+    read: hydrateRoute,
     createBody: createCollectionBody,
     onMount: mountCollectionBody,
     onHide: cancelDiscard,
@@ -34,7 +37,8 @@ export const toolboxPages: readonly ToolboxPage[] = [
   {
     id: 'market',
     label: 'Market',
-    matches: path => /^\/marketplace(\/|$)/.test(path),
+    matches: path => resolvePageAdapter(path)?.id === 'market',
+    read: hydrateRoute,
     createBody: createMarketBody,
     onMount: renderMarketPanel,
     onUnmount: () => {
@@ -47,7 +51,8 @@ export const toolboxPages: readonly ToolboxPage[] = [
   {
     id: 'packs',
     label: 'Packs',
-    matches: path => /^\/pulls(\/|$)/.test(path),
+    matches: path => resolvePageAdapter(path)?.id === 'packs',
+    read: hydrateRoute,
     createBody: () => {
       const body = createPacksBody()
       body.append(createPriceControls())
@@ -58,9 +63,19 @@ export const toolboxPages: readonly ToolboxPage[] = [
     onUnmount: leavePacksPage,
   },
   {
-    id: 'prices',
-    label: 'Prices',
-    matches: path => /^\/(global-collection|trades)(\/|$)/.test(path),
+    id: 'catalogue',
+    label: 'Catalogue',
+    matches: path => resolvePageAdapter(path)?.id === 'catalogue',
+    read: hydrateRoute,
+    createBody: createPricesBody,
+    onMount: renderPricePanel,
+    onUnmount: cancelPriceBatch,
+  },
+  {
+    id: 'trades',
+    label: 'Trades',
+    matches: path => resolvePageAdapter(path)?.id === 'trades',
+    read: hydrateRoute,
     createBody: createPricesBody,
     onMount: renderPricePanel,
     onUnmount: cancelPriceBatch,

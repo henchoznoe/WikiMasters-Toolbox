@@ -47,6 +47,7 @@ async function expose(module, names, context = {}, extra = '') {
     write: false,
     define: { WM_TOOLBOX_CSS: '""' },
   })
+  Object.assign(context, { AbortController, AbortSignal, URL })
   vm.runInNewContext(result.outputFiles[0].text, context)
   return context
 }
@@ -356,7 +357,7 @@ test('sale checks complete collection, protects unique copies, journals before n
   await c.checkSale(false)
   assert.match(c.getSaleState().error, /Only copy/)
   const checking = c.checkSale(true)
-  for (let i = 0; i < 100 && !c.getSaleState().checked; i++)
+  for (let i = 0; i < 240 && !c.getSaleState().checked; i++)
     await new Promise(r => setTimeout(r, 25))
   assert.equal(c.getSaleState().checked, true)
   const confirmation = new Event('wm-toolbox:sale-submit', {
@@ -478,7 +479,7 @@ test('receipt storage failure and a busy browser lock prevent native approval', 
   c.setAccountId(OWNER)
   c.observeSaleCard(CARD)
   const checking = c.checkSale(true)
-  for (let i = 0; i < 100 && !c.getSaleState().checked; i++)
+  for (let i = 0; i < 240 && !c.getSaleState().checked; i++)
     await new Promise(resolve => setTimeout(resolve, 25))
   assert.equal(c.getSaleState().checked, true)
   storage.setItem = () => {

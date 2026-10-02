@@ -17,6 +17,7 @@ async function expose(path, names, context, extra = '') {
     format: 'iife',
     write: false,
   })
+  Object.assign(context, { AbortController, AbortSignal, URL })
   vm.runInNewContext(result.outputFiles[0].text, context)
 }
 function copy(n, values = {}) {
@@ -146,7 +147,7 @@ async function actions({
     AbortController,
     Response,
     Date,
-    setTimeout: (cb, ms) => setTimeout(cb, ms >= 15_000 ? ms : 0),
+    setTimeout: (cb, ms) => setTimeout(cb, ms >= 12_000 ? ms : 0),
     clearTimeout,
     navigator: {
       locks: locks
@@ -370,7 +371,7 @@ test('account changes during a write stop subsequent requests and keep the old r
   assert.deepEqual(writes, ['copy-1'])
   assert.equal(c.getSelectionState().results.length, 0)
   c.setAccountId(OWNER)
-  assert.equal(c.getSelectionState().results[0].status, 'discarded')
+  assert.equal(c.getSelectionState().results[0].status, 'unknown')
 })
 
 test('unavailable or occupied browser locks prevent writes', async () => {

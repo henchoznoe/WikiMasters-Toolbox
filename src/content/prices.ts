@@ -1,9 +1,16 @@
+import { setCompatibilityIssue } from './compatibility'
+import {
+  cardSelectors,
+  parsePageCards,
+  resolvePageAdapter,
+} from './page-adapters'
 import { presentPrice } from './price-presentation'
+import { requestJson } from './requests'
 
 export { formatPriceAge, presentPrice } from './price-presentation'
 
 import { cardVariantKey, mapCard } from '../cards'
-import { getAccountId, setAccountId } from './account'
+import { getAccountId } from './account'
 import { openPriceInspector } from './price-inspector'
 import {
   needsPrice,
@@ -49,6 +56,17 @@ export function registerCards(cards: Card[], kind?: string): void {
   for (const card of cards) {
     const key = cardVariantKey(card)
     cardsByVariant.set(key, card)
+    if (cardsByVariant.size > 10_000) {
+      const oldest = cardsByVariant.keys().next().value as string
+      const removed = cardsByVariant.get(oldest)
+      cardsByVariant.delete(oldest)
+      if (removed) {
+        const title = normalizeTitle(removed.title)
+        const variants = variantsByTitle.get(title)
+        variants?.delete(oldest)
+        if (!variants?.size) variantsByTitle.delete(title)
+      }
+    }
     const title = normalizeTitle(card.title)
     const variants = variantsByTitle.get(title) ?? new Set<string>()
     variants.add(key)
@@ -61,6 +79,14 @@ export function resetRegisteredCards(): void {
   cardsByVariant.clear()
   variantsByTitle.clear()
   marketplaceCard = null
+  visiblePriceObserver.disconnect()
+  for (const card of document.querySelectorAll<HTMLElement>(
+    '[data-wm-toolbox-card-id]',
+  )) {
+    delete card.dataset.wmToolboxCardId
+    delete card.dataset.wmToolboxCardTitle
+    delete card.dataset.wmToolboxCardRarity
+  }
   for (const host of document.querySelectorAll(
     '[data-wm-toolbox-price], [data-wm-toolbox-marketplace]',
   ))
@@ -140,9 +166,7 @@ function rarityFromElement(card: Element): string | null {
 }
 
 function getCardElement(heading: Element): HTMLElement | null {
-  return heading.closest<HTMLElement>(
-    'div[class*="rounded-2xl"][class*="overflow-hidden"][class*="cursor-pointer"], a[href^="/marketplace/"]',
-  )
+  return heading.closest<HTMLElement>(cardSelectors.grid)
 }
 
 function renderBadge(card: HTMLElement, identity: Card): void {
@@ -150,7 +174,7 @@ function renderBadge(card: HTMLElement, identity: Card): void {
   const heading = card.querySelector('h3')
   if (!heading?.parentElement) return
   const stats = heading.parentElement.querySelector<HTMLElement>(
-    ':scope > div.mt-auto',
+    cardSelectors.stats,
   )
   if (!stats) return
   let host = card.querySelector<HTMLElement>('[data-wm-toolbox-price]')
@@ -194,9 +218,13 @@ export function renderCards(): void {
     )
   )
     return
+  let missingLayout = false
   for (const heading of document.querySelectorAll('h3')) {
     const card = getCardElement(heading)
-    if (!card) continue
+    if (!card) {
+      if (resolveVisibleCard(heading.textContent, null)) missingLayout = true
+      continue
+    }
     const identity = resolveVisibleCard(
       heading.textContent,
       rarityFromElement(card),
@@ -209,14 +237,17 @@ export function renderCards(): void {
     card.dataset.wmToolboxCardId = identity.id
     card.dataset.wmToolboxCardTitle = identity.title
     card.dataset.wmToolboxCardRarity = identity.rarity ?? ''
+    if (!heading.parentElement?.querySelector(cardSelectors.stats))
+      missingLayout = true
     renderBadge(card, identity)
   }
+  setCompatibilityIssue(
+    'card-ui',
+    missingLayout ? 'Card layout changed; some prices hidden' : null,
+  )
   for (const heading of document.querySelectorAll<HTMLElement>('h2')) {
     const parent = heading.parentElement
-    if (
-      !parent?.querySelector('[role="tablist"][aria-label="Vue de la carte"]')
-    )
-      continue
+    if (!parent?.querySelector(cardSelectors.modal)) continue
     const card = resolveVisibleCard(
       heading.textContent,
       rarityFromElement(parent),
@@ -307,13 +338,23 @@ export function renderMarketplace(): void {
   if (needsPrice(id)) void requestPriceQuote(id)
 }
 
+let hydration: AbortController | null = null
+export function cancelRouteRead(): void {
+  hydration?.abort()
+  hydration = null
+}
 export async function hydrateRoute(): Promise<void> {
+  cancelRouteRead()
+  const run = new AbortController()
+  hydration = run
   const path = location.pathname
   const expectedAccount = getAccountId()
+  const adapter = resolvePageAdapter(path)
   marketplaceCard = null
-  let url: string | null = null
-  if (/^\/global-collection(\/|$)/.test(path)) {
-    url = '/api/cards?page=0&sort=rarity'
+  if (!adapter) return
+  if (!expectedAccount && ['collection', 'trades'].includes(adapter.id)) return
+  const url = adapter.url(path)
+  if (adapter.id === 'catalogue') {
     // The game's catalogue can restore filtered pages without making a fetch.
     // Recover only public card metadata; ownership and friend fields are ignored.
     try {
@@ -340,52 +381,50 @@ export async function hydrateRoute(): Promise<void> {
       /* Live response interception still works without session storage. */
     }
   }
-  if (path === '/trades') url = '/api/trades'
-  if (path === '/marketplace') url = '/api/marketplace?page=1&limit=50'
-  if (/^\/collection(\/|$)/.test(path))
-    url = '/api/my-collection?sort=rarity&page=0&stats=0'
-  const auction = path.match(/^\/marketplace\/([0-9a-f-]{36})\/?$/i)?.[1]
-  if (auction) url = `/api/marketplace/${auction}`
   if (!url) return
   try {
-    const response = await fetch(url, {
-      credentials: 'include',
-      signal: AbortSignal.timeout(12_000),
-    })
-    if (!response.ok) return
-    const json = (await response.json()) as Record<string, unknown>
-    if (location.pathname !== path) return
-    if (expectedAccount && getAccountId() !== expectedAccount) return
-    if (Array.isArray(json.collection)) {
-      const owner = json.collection.find(
-        row =>
-          row && typeof row === 'object' && typeof row.user_id === 'string',
-      )?.user_id
-      if (owner && getAccountId() && owner !== getAccountId()) return
-      if (owner) setAccountId(owner)
-      registerCards(
-        json.collection
-          .map(row => mapCard(row, true))
-          .filter((card): card is Card => card !== null),
+    const json = await requestJson(url, run.signal)
+    if (
+      run.signal.aborted ||
+      location.pathname !== path ||
+      getAccountId() !== expectedAccount
+    )
+      return
+    const cards = parsePageCards(adapter, json)
+    if (!cards) {
+      setCompatibilityIssue(
+        adapter.id,
+        'Game data format changed; reload the page',
       )
-    } else if (Array.isArray(json.cards) || Array.isArray(json.auctions)) {
-      registerCards(
-        ((json.cards as unknown[]) ?? (json.auctions as unknown[]))
-          .map(row => mapCard(row))
-          .filter((card): card is Card => card !== null),
-      )
-    } else if (Array.isArray(json.trades)) {
-      registerCards(
-        json.trades
-          .flatMap(trade => (Array.isArray(trade?.items) ? trade.items : []))
-          .map(row => mapCard(row))
-          .filter((card): card is Card => card !== null),
-      )
-    } else if (json.auction && typeof json.auction === 'object') {
-      const card = mapCard(json.auction)
-      if (card) registerCards([card], 'marketplace')
+      return
     }
-  } catch (error) {
-    console.debug('[WikiMasters Toolbox] page data unavailable', error)
+    if (adapter.kind === 'collection') {
+      const raw = json.collection as Record<string, unknown>[]
+      const owners = new Set(
+        raw.map(row => row.user_id).filter(value => typeof value === 'string'),
+      )
+      if (
+        owners.size > 1 ||
+        (expectedAccount &&
+          [...owners].some(owner => owner !== expectedAccount))
+      ) {
+        setCompatibilityIssue(
+          'collection',
+          'Collection account mismatch; actions paused',
+        )
+        return
+      }
+    }
+    setCompatibilityIssue(adapter.id, null)
+    setCompatibilityIssue(`read:${adapter.id}`, null)
+    registerCards(cards, json.auction ? 'marketplace' : adapter.kind)
+  } catch {
+    if (!run.signal.aborted && getAccountId() === expectedAccount)
+      setCompatibilityIssue(
+        `read:${adapter.id}`,
+        'Page data unavailable; reload to retry',
+      )
+  } finally {
+    if (hydration === run) hydration = null
   }
 }

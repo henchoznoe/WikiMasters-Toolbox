@@ -4,12 +4,15 @@ import {
   mapOwnedCard,
   type OwnedCard,
 } from '../cards'
-import { getAccountId, onAccountChange, setAccountId } from './account'
+import { getAccountId, onAccountChange } from './account'
+import { cachePolicies, onCacheChange, writeCache } from './cache'
+import { collectionCompatible, setCompatibilityIssue } from './compatibility'
+import { requestJson } from './requests'
 
 export const COLLECTION_PREFIX = 'wm_toolbox_collection_v1:'
 const PAGE_SIZE = 50
 const MAX_PAGES = 2000
-const FRESH_FOR = 5 * 60_000
+const FRESH_FOR = cachePolicies.collection.freshness
 const RESUME_FOR = 15 * 60_000
 
 type Snapshot = {
@@ -60,15 +63,11 @@ function emptySnapshot(accountId: string, enabled = false): Snapshot {
 }
 function persist(): void {
   if (!snapshot) return
-  try {
-    localStorage.setItem(
-      COLLECTION_PREFIX + snapshot.accountId,
-      JSON.stringify(snapshot),
-    )
-    persistent = true
-  } catch {
-    persistent = false
-  }
+  persistent = writeCache(
+    'collection',
+    COLLECTION_PREFIX + snapshot.accountId,
+    { ...snapshot, storedAt: Date.now() },
+  )
 }
 function validStoredCopy(value: unknown, owner: string): value is OwnedCard {
   if (!value || typeof value !== 'object') return false
@@ -119,7 +118,13 @@ function restore(): void {
         typeof saved.complete === 'boolean' &&
         typeof saved.enabled === 'boolean' &&
         Number.isFinite(saved.updatedAt) &&
-        Number.isFinite(saved.startedAt)
+        Number.isFinite(saved.startedAt) &&
+        saved.updatedAt >= 0 &&
+        saved.updatedAt <= Date.now() &&
+        saved.startedAt >= 0 &&
+        saved.startedAt <= Date.now() &&
+        (!saved.updatedAt ||
+          Date.now() - saved.updatedAt <= cachePolicies.collection.retention)
       ) {
         const copies = saved.pages.flat()
         if (
@@ -150,17 +155,20 @@ onAccountChange(restore)
 
 export function getCollectionState(): CollectionState {
   return {
-    status:
-      status === 'complete' &&
-      snapshot &&
-      Date.now() - snapshot.updatedAt > FRESH_FOR
+    status: !collectionCompatible()
+      ? 'error'
+      : status === 'complete' &&
+          snapshot &&
+          Date.now() - snapshot.updatedAt > FRESH_FOR
         ? 'stale'
         : status,
     cards: snapshot?.pages.flat() ?? [],
     pages: snapshot?.pages.length ?? 0,
     total: snapshot?.total ?? null,
     updatedAt: snapshot?.updatedAt ?? 0,
-    error,
+    error: collectionCompatible()
+      ? error
+      : 'Collection format changed; reload the page',
     persistent,
     retrying,
   }
@@ -168,6 +176,7 @@ export function getCollectionState(): CollectionState {
 export function getOwnedCopy(copyId: string): OwnedCard | null {
   // Only an authoritative, fresh index can feed an action on a possession.
   if (
+    !collectionCompatible() ||
     status !== 'complete' ||
     !snapshot ||
     Date.now() - snapshot.updatedAt > FRESH_FOR
@@ -205,53 +214,11 @@ export async function readCollectionJson(
   url: string,
   signal: AbortSignal,
 ): Promise<Record<string, unknown>> {
-  if (signal.aborted) throw signal.reason
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const request = new AbortController()
-    const abort = (): void => request.abort(signal.reason)
-    signal.addEventListener('abort', abort, { once: true })
-    const timeout = setTimeout(() => request.abort(), 15_000)
-    let waitMs = 500 * 2 ** attempt
-    try {
-      const response = await fetch(url, {
-        credentials: 'include',
-        signal: request.signal,
-      })
-      if (response.status === 401) {
-        setAccountId(null)
-        throw new Error('Session expired')
-      }
-      if (!response.ok) {
-        if (response.status !== 429 && response.status < 500)
-          throw new Error(`HTTP ${response.status}`)
-        const retryAfter = Number(response.headers.get('retry-after'))
-        if (Number.isFinite(retryAfter) && retryAfter > 0)
-          waitMs = Math.min(8000, retryAfter * 1000)
-        throw new Error(`The game is busy (HTTP ${response.status})`)
-      }
-      const json: unknown = await response.json()
-      if (!json || typeof json !== 'object' || Array.isArray(json))
-        throw new Error('Invalid collection response')
-      retrying = false
-      return json as Record<string, unknown>
-    } catch (cause) {
-      if (signal.aborted) throw signal.reason
-      const message = cause instanceof Error ? cause.message : 'Network error'
-      if (
-        attempt === 2 ||
-        /^HTTP 4/.test(message) ||
-        message === 'Invalid collection response'
-      )
-        throw cause
-    } finally {
-      clearTimeout(timeout)
-      signal.removeEventListener('abort', abort)
-    }
+  retrying = false
+  return requestJson(url, signal, () => {
     retrying = true
     notify()
-    await delay(waitMs, signal)
-  }
-  throw new Error('Collection unavailable')
+  })
 }
 async function readTotal(signal: AbortSignal): Promise<number> {
   const json = await readCollectionJson('/api/my-collection/stats', signal)
@@ -270,11 +237,21 @@ async function readPage(
     `/api/my-collection?sort=added&page=${page}&stats=0`,
     signal,
   )
-  if (!Array.isArray(json.collection) || json.collection.length > PAGE_SIZE)
+  if (!Array.isArray(json.collection) || json.collection.length > PAGE_SIZE) {
+    setCompatibilityIssue(
+      'collection',
+      'Collection format changed; actions paused',
+    )
     throw new Error('Invalid collection page')
+  }
   const cards = json.collection.map(mapOwnedCard)
-  if (cards.some(card => !card || card.ownerId !== owner))
+  if (cards.some(card => !card || card.ownerId !== owner)) {
+    setCompatibilityIssue(
+      'collection',
+      'Possession format changed; actions paused',
+    )
     throw new Error('Possession identity unavailable')
+  }
   return cards as OwnedCard[]
 }
 function fingerprint(cards: readonly OwnedCard[]): string {
@@ -428,6 +405,7 @@ async function traverseCollection(fresh: boolean): Promise<void> {
       current.pages = []
       throw new Error('Collection changed while loading; retry to refresh')
     }
+    setCompatibilityIssue('collection', null)
     current.complete = true
     current.updatedAt = Date.now()
     status = 'complete'
@@ -448,3 +426,7 @@ async function traverseCollection(fresh: boolean): Promise<void> {
     }
   }
 }
+
+onCacheChange(kind => {
+  if (kind === 'collection') restore()
+})
