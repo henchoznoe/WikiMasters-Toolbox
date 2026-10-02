@@ -15,10 +15,11 @@ function emit(data: Record<string, unknown>): void {
 }
 
 function accountIdFromProfileUrl(url: URL): string | null {
+  // Only the ID is used; ignore the other columns in the native profile lookup.
   if (
     !url.hostname.endsWith('.supabase.co') ||
     url.pathname !== '/rest/v1/profiles' ||
-    url.searchParams.get('select')?.replace(/\s/g, '') !== 'id,is_pro'
+    url.searchParams.get('select')?.split(',')[0]?.trim() !== 'id'
   )
     return null
   return (

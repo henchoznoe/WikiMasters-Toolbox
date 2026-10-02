@@ -29,11 +29,7 @@ import {
   renderPriceInspector,
 } from './content/price-inspector'
 import { renderPricePanel } from './content/price-panel'
-import {
-  cancelPriceBatch,
-  resetPriceAccount,
-  syncPricesFromStorage,
-} from './content/price-store'
+import { cancelPriceBatch, syncPricesFromStorage } from './content/price-store'
 import {
   hydrateRoute,
   registerCards,
@@ -80,7 +76,7 @@ onCollectionChange(() => {
   scheduleRender()
 })
 onAccountChange(() => {
-  resetPriceAccount()
+  cancelPriceBatch()
   closePriceInspector()
   resetRegisteredCards()
   void hydrateRoute()

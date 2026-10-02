@@ -2,11 +2,8 @@ import { type Observation, RARITIES } from './price-model'
 import { presentPrice } from './price-presentation'
 import {
   canRefreshPrice,
-  priceRequestLimit,
-  readPriceDetail,
   readPriceHistory,
   readPriceQuote,
-  requestPriceDetail,
   requestPriceQuote,
 } from './price-store'
 import { createRarityBadge } from './rarity'
@@ -60,22 +57,12 @@ export function openPriceInspector(
   value.dataset.priceInspectorValue = '1'
   const history = document.createElement('div')
   history.dataset.priceHistory = '1'
-  const analysis = document.createElement('p')
-  analysis.dataset.priceAnalysis = '1'
-  analysis.className = 'wm-note'
   const actions = document.createElement('div')
   actions.className = 'wm-collection-actions'
   actions.append(
     button('↻', 'Refresh this card · one attempt per minute', () => {
       void requestPriceQuote(id, true)
     }),
-    button(
-      'Sales',
-      'Analyze accessible settled sales · PRO may be required',
-      () => {
-        void requestPriceDetail(id)
-      },
-    ),
   )
   actions.firstElementChild?.setAttribute('data-price-refresh', '1')
   const method = document.createElement('details')
@@ -85,9 +72,9 @@ export function openPriceInspector(
   const explanation = document.createElement('p')
   explanation.className = 'wm-note'
   explanation.textContent =
-    'Average: WikiMasters summary for this rarity, source window and volume unknown. Age: when checked, not when sold. Shiny premium is not exposed. Local graph: one observation per UTC day, last 90 days; missing days are gaps. Sales: accessible sample settled in the last 30 days, coverage unknown. Median from 5 sales; range from 10: middle 50% (P25–P75), not a guaranteed sale price. Outliers: outside 1.5 × IQR, retained in the sample. Confidence stays low unless ≥20 sales with limited dispersion; never a fair-price guarantee.'
+    'Average: WikiMasters summary for this rarity, source window and volume unknown. Age: when checked, not when sold. Shiny premium is not exposed. Local graph: one observation per UTC day, last 90 days; missing days are gaps.'
   method.append(summary, explanation)
-  dialog.append(header, rarities, value, actions, history, analysis, method)
+  dialog.append(header, rarities, value, actions, history, method)
   root.append(dialog)
   document.body.append(host)
   dialog.addEventListener('keydown', event => {
@@ -210,27 +197,4 @@ export function renderPriceInspector(): void {
       : 'No local observations yet'
     history.append(caption)
   }
-  const detail = readPriceDetail(id)
-  const result = root.querySelector<HTMLElement>('[data-price-analysis]')
-  if (!result) return
-  const analysis = detail.analyses?.[rarity]
-  result.textContent =
-    priceRequestLimit() ||
-    (detail.status === 'loading'
-      ? '…'
-      : detail.status === 'pro-required'
-        ? 'Detailed sales require WikiMasters PRO · average only'
-        : detail.status === 'unavailable'
-          ? 'Sales request failed · !'
-          : analysis
-            ? `${analysis.count} accessible sales / 30 days · ${analysis.confidence} confidence${analysis.median !== null ? ` · median ${money(analysis.median)} W` : ' · ≥5 sales needed for median'}${analysis.low !== null && analysis.high !== null ? ` · indicative range ${money(analysis.low)}–${money(analysis.high)} W` : ' · ≥10 sales needed for range'} · ${analysis.outliers} outliers${analysis.oldest && analysis.newest ? ` · ${new Date(analysis.oldest).toLocaleDateString()} – ${new Date(analysis.newest).toLocaleDateString()}` : ''}`
-            : 'Average only · volume / period unknown')
-  result.title = detail.at
-    ? `Sales last checked ${new Date(detail.at).toLocaleString()}`
-    : 'Detailed sales are loaded only on request'
-}
-function money(value: number): string {
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(
-    value,
-  )
 }

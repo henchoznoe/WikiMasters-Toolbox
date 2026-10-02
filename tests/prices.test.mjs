@@ -67,41 +67,6 @@ test('summary rejects malformed and negative prices and preserves zero without b
   assert.equal(parseSummary({ R: { average: 0 }, C: { average: null } }).R, 0)
 })
 
-test('robust estimates need actual unique recent settled sales of the correct rarity', async () => {
-  const { analyzeSales } = await expose('price-model', ['analyzeSales'])
-  const now = Date.now()
-  const sales = Array.from({ length: 20 }, (_, n) => ({
-    id: String(n),
-    rarity: 'R',
-    final_price: n === 19 ? 1000 : 10 + (n % 3),
-    settled_at: new Date(now - (n + 1) * 1000).toISOString(),
-  }))
-  sales.push(
-    sales[0],
-    {
-      ...sales[0],
-      id: 'old',
-      settled_at: new Date(now - 31 * day).toISOString(),
-    },
-    {
-      ...sales[0],
-      id: 'future',
-      settled_at: new Date(now + day).toISOString(),
-    },
-    { ...sales[0], id: 'wrong', rarity: 'UR' },
-    { ...sales[0], id: 'invalid', final_price: -1 },
-  )
-  const result = analyzeSales(sales, 'R', now)
-  assert.equal(result.count, 20)
-  assert.equal(result.median, 11)
-  assert.equal(result.outliers, 1)
-  assert.equal(result.confidence, 'moderate')
-  assert.ok(result.low >= 10 && result.high <= 12)
-  assert.equal(analyzeSales(sales.slice(0, 4), 'R', now).median, null)
-  assert.equal(analyzeSales(sales.slice(0, 9), 'R', now).low, null)
-  assert.equal(analyzeSales(sales, 'C', now).count, 0)
-})
-
 test('history replaces a same UTC-day observation without inventing intervening days', async () => {
   const { appendObservation } = await expose('price-model', [
     'appendObservation',
@@ -210,62 +175,6 @@ test('rate limits pause remaining price reads without automatic retries', async 
   h.advance(61_000)
   await h.context.startPriceBatch(['b'])
   assert.equal(calls, 2)
-})
-
-test('PRO requirement is explicit, cached briefly and never replaced with invented sales', async () => {
-  let calls = 0
-  const h = harness(async () => {
-    calls++
-    return {
-      ok: false,
-      status: 403,
-      headers: { get: () => null },
-      json: async () => ({ code: 'pro_required' }),
-    }
-  })
-  await expose(
-    'price-store',
-    ['requestPriceDetail', 'readPriceDetail'],
-    h.context,
-  )
-  await h.context.requestPriceDetail('a')
-  assert.equal(h.context.readPriceDetail('a').status, 'pro-required')
-  assert.equal(h.context.readPriceDetail('a').analyses, undefined)
-  await h.context.requestPriceDetail('a')
-  assert.equal(calls, 1)
-})
-
-test('individual sales analyses do not survive an account change during the read', async () => {
-  let release
-  const h = harness(async () => {
-    await new Promise(resolve => {
-      release = resolve
-    })
-    return {
-      ok: true,
-      status: 200,
-      headers: { get: () => null },
-      json: async () => ({ sales: [] }),
-    }
-  })
-  const result = await build({
-    stdin: {
-      contents: `import {setAccountId} from './src/content/account.ts'; import {requestPriceDetail,readPriceDetail,resetPriceAccount} from './src/content/price-store.ts'; Object.assign(globalThis,{setAccountId,requestPriceDetail,readPriceDetail,resetPriceAccount})`,
-      resolveDir: root,
-    },
-    bundle: true,
-    write: false,
-    format: 'iife',
-    platform: 'browser',
-  })
-  vm.runInNewContext(result.outputFiles[0].text, h.context)
-  h.context.setAccountId('11111111-1111-4111-8111-111111111111')
-  const pending = h.context.requestPriceDetail('a')
-  h.context.setAccountId('22222222-2222-4222-8222-222222222222')
-  h.context.resetPriceAccount()
-  release()
-  await pending
-  assert.equal(h.context.readPriceDetail('a').status, 'idle')
 })
 
 test('cached legacy averages remain usable but malformed or future cache cannot produce a quote', async () => {
