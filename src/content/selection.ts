@@ -8,7 +8,12 @@ export type SelectionRules = {
   protect: Record<Protection, boolean>
   keep: number
 }
-export type Commitments = { catalogueIds: Set<string>; copyIds: Set<string> }
+export type Commitments = {
+  catalogueIds: Set<string>
+  copyIds: Set<string>
+  saleCopyIds?: Set<string>
+  tradeCopyIds?: Set<string>
+}
 export type SelectionPlan = {
   cards: OwnedCard[]
   blocked: Map<string, string>
