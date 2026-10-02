@@ -17,6 +17,7 @@ async function expose(module, names, context = {}) {
     format: 'iife',
     platform: 'browser',
   })
+  Object.assign(context, { AbortController, AbortSignal, URL })
   vm.runInNewContext(result.outputFiles[0].text, context)
   return context
 }
@@ -35,7 +36,8 @@ function harness(fetch) {
           return now
         }
       },
-      setTimeout: callback => {
+      setTimeout: (callback, ms) => {
+        if (ms === 12_000) return 2
         now += 650
         queueMicrotask(callback)
         return 1

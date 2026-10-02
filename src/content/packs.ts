@@ -1,5 +1,6 @@
-import { getAccountId } from './account'
+import { getAccountId, onAccountChange } from './account'
 import { invalidateCollection } from './collection'
+import { requestWrite, serverPauseMs } from './requests'
 import { captureRunCards, type RunCard, saveRunSummary } from './run-summary'
 import { recordPack } from './stats'
 
@@ -21,8 +22,8 @@ type PackResponse = {
   human_verification_required?: boolean
 }
 
-export const AUTO_KEY = 'wm_toolbox_auto_v1'
-export const MANUAL_LIMIT_KEY = 'wm_toolbox_manual_limit_v1'
+export const AUTO_KEY = 'wm_toolbox_auto_v2:'
+export const MANUAL_LIMIT_KEY = 'wm_toolbox_manual_limit_v2:'
 const MAX_PACKS_PER_CYCLE = 100
 const OPEN_LOCK = 'wm-toolbox-auto-open'
 const AUTO_RETRY_MS = 5_000
@@ -51,7 +52,9 @@ type OpenResult = {
 
 function readManualLimit(): number | null {
   try {
-    const raw = localStorage.getItem(MANUAL_LIMIT_KEY)
+    const raw = getAccountId()
+      ? localStorage.getItem(MANUAL_LIMIT_KEY + getAccountId())
+      : null
     if (!raw) return null
     const value = Number(raw)
     return Number.isInteger(value) && value >= 1 && value <= MAX_PACKS_PER_CYCLE
@@ -67,13 +70,19 @@ export function getManualLimit(): number | null {
 }
 
 export function setManualLimit(value: number | null): void {
+  if (!getAccountId()) return
   manualLimit =
     value === null || !Number.isFinite(value)
       ? null
       : Math.max(1, Math.min(MAX_PACKS_PER_CYCLE, Math.round(value)))
   try {
-    if (manualLimit === null) localStorage.removeItem(MANUAL_LIMIT_KEY)
-    else localStorage.setItem(MANUAL_LIMIT_KEY, String(manualLimit))
+    if (manualLimit === null)
+      localStorage.removeItem(MANUAL_LIMIT_KEY + getAccountId())
+    else
+      localStorage.setItem(
+        MANUAL_LIMIT_KEY + getAccountId(),
+        String(manualLimit),
+      )
   } catch {
     /* Storage unavailable. */
   }
@@ -87,7 +96,9 @@ export function syncManualLimitFromStorage(): void {
 
 function readPrefs(): AutoPrefs {
   try {
-    const raw = localStorage.getItem(AUTO_KEY)
+    const raw = getAccountId()
+      ? localStorage.getItem(AUTO_KEY + getAccountId())
+      : null
     const parsed = raw ? (JSON.parse(raw) as Partial<AutoPrefs>) : {}
     const min = Number(parsed.minMinutes)
     const max = Number(parsed.maxMinutes)
@@ -146,6 +157,7 @@ export function observeNativePack(): void {
 }
 
 export function setAutoEnabled(enabled: boolean): void {
+  if (!getAccountId()) return
   prefs.enabled = enabled
   prefs.nextAt =
     enabled && !prefs.verificationRequired ? Date.now() + randomDelay() : 0
@@ -208,6 +220,10 @@ export function onOpenAllClick(): void {
     runController?.abort(new Error('Stopped by user'))
     return
   }
+  if (!getAccountId()) {
+    setStatus('Waiting for your WikiMasters account…')
+    return
+  }
   if (confirmationTimer) {
     clearOpenAllConfirmation()
     void runPacks('manual')
@@ -218,8 +234,9 @@ export function onOpenAllClick(): void {
 }
 
 function writePrefs(): void {
+  if (!getAccountId()) return
   try {
-    localStorage.setItem(AUTO_KEY, JSON.stringify(prefs))
+    localStorage.setItem(AUTO_KEY + getAccountId(), JSON.stringify(prefs))
   } catch {
     /* Storage unavailable. */
   }
@@ -327,35 +344,22 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 export async function openOnePack(signal: AbortSignal): Promise<PackResponse> {
+  if (signal.aborted) throw signal.reason
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const requestController = new AbortController()
-    const timeout = setTimeout(
-      () => requestController.abort(new Error('Request timed out')),
-      15_000,
-    )
-    const abort = (): void => requestController.abort(signal.reason)
-    signal.addEventListener('abort', abort, { once: true })
-    let response: Response
-    let json: PackResponse
-    try {
-      response = await fetch('/api/packs/open', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { accept: '*/*' },
-        signal: requestController.signal,
-      })
-      json = (await response.json()) as PackResponse
-    } finally {
-      clearTimeout(timeout)
-      signal.removeEventListener('abort', abort)
-    }
+    const result = await requestWrite('/api/packs/open', signal, {
+      headers: { accept: '*/*' },
+    })
+    const response = result.response
+    const json = result.json as PackResponse
+    if (!json || typeof json !== 'object')
+      throw new Error('Pack response changed')
     if (json.human_verification_required === true) {
       requirePackVerification()
       throw new HumanVerificationError(VERIFICATION_STATUS)
     }
     if (json.rate_limited && !json.rate_limit_daily) {
       const retryAt = Date.parse(json.retry_after || '')
-      const waitMs = retryAt - Date.now() + 200
+      const waitMs = Math.max(retryAt - Date.now() + 200, serverPauseMs())
       if (
         !Number.isFinite(waitMs) ||
         waitMs < 0 ||
@@ -395,6 +399,11 @@ export async function openAvailablePacks(
       throw new Error('WikiMasters account changed during the run')
     setStatus(`Opening pack ${index + 1}…`)
     const response = await openOnePack(signal)
+    if (
+      signal.aborted ||
+      (expectedAccountId && getAccountId() !== expectedAccountId)
+    )
+      throw new Error('WikiMasters account changed during the run')
     if (!Array.isArray(response.cards) || response.cards.length === 0) {
       if (response.packs_remaining === 0)
         return { opened: openedThisCycle, remaining: 0, reason: 'empty' }
@@ -427,7 +436,9 @@ export async function openAvailablePacks(
 }
 
 export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
-  if (runController || (mode === 'auto' && !prefs.enabled)) return
+  const expectedAccount = getAccountId()
+  if (!expectedAccount || runController || (mode === 'auto' && !prefs.enabled))
+    return
   clearOpenAllConfirmation()
   if (!navigator.locks) {
     setStatus('Cross-tab lock unavailable')
@@ -442,6 +453,7 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
         if (mode === 'auto') schedulePassiveRetry()
         return
       }
+      if (getAccountId() !== expectedAccount) return
       prefs = readPrefs()
       if (prefs.verificationRequired) {
         setStatus(VERIFICATION_STATUS)
@@ -499,9 +511,10 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
               : error instanceof Error
                 ? `Failed: ${error.message}.`
                 : 'Failed: the game could not open the next pack.'
-        setStatus(detail)
+        if (getAccountId() === accountId) setStatus(detail)
       } finally {
         const shouldRefresh =
+          getAccountId() === accountId &&
           openedThisCycle > 0 &&
           !readPrefs().verificationRequired &&
           /^\/pulls(\/|$)/.test(location.pathname)
@@ -521,12 +534,23 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
         runMode = null
         updateOpenAllButton()
         prefs = readPrefs()
-        if (prefs.enabled && !prefs.verificationRequired) {
+        if (
+          getAccountId() === accountId &&
+          prefs.enabled &&
+          !prefs.verificationRequired
+        ) {
           prefs.nextAt = Date.now() + randomDelay()
           writePrefs()
-          scheduleAuto()
         }
-        if (shouldRefresh) setTimeout(() => location.reload(), 800)
+        if (prefs.enabled && !prefs.verificationRequired) scheduleAuto()
+        if (shouldRefresh)
+          setTimeout(() => {
+            if (
+              getAccountId() === accountId &&
+              /^\/pulls(\/|$)/.test(location.pathname)
+            )
+              location.reload()
+          }, 800)
       }
     },
   )
@@ -541,7 +565,8 @@ export function updateOpenAllButton(): void {
     .querySelector<HTMLElement>('[data-wm-toolbox-panel]')
     ?.shadowRoot?.querySelector<HTMLButtonElement>('[data-wm-toolbox-open-all]')
   if (!button) return
-  button.disabled = runMode === 'auto' || prefs.verificationRequired
+  button.disabled =
+    !getAccountId() || runMode === 'auto' || prefs.verificationRequired
   button.classList.toggle('wm-open-all-confirm', confirmationTimer !== null)
   button.textContent = prefs.verificationRequired
     ? 'Verify with the game’s Open button'
@@ -589,3 +614,17 @@ function hideProgress(): void {
     ?.shadowRoot?.querySelector<HTMLElement>('[data-wm-toolbox-progress]')
   if (progress) progress.hidden = true
 }
+
+onAccountChange(() => {
+  if (autoTimer) clearTimeout(autoTimer)
+  autoTimer = null
+  clearOpenAllConfirmation()
+  runController?.abort(new Error('WikiMasters account changed'))
+  prefs = readPrefs()
+  manualLimit = readManualLimit()
+  setStatus(
+    getAccountId() ? 'Disabled' : 'Waiting for your WikiMasters account…',
+  )
+  updateOpenAllButton()
+  if (prefs.enabled && !runController) scheduleAuto()
+})

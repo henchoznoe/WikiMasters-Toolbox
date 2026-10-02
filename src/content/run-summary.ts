@@ -25,8 +25,41 @@ export type RunSummary = {
   expanded: boolean
 }
 
-export const RUN_SUMMARY_KEY = 'wm_toolbox_last_pack_run_v1'
+export const RUN_SUMMARY_KEY = 'wm_toolbox_last_pack_run_v2:'
 const PRICE_PREFETCH_LIMIT = 50
+const RUN_RETENTION = 7 * 86400_000
+function cleanRunSummaries(): void {
+  try {
+    const keys = Array.from({ length: sessionStorage.length }, (_, i) =>
+      sessionStorage.key(i),
+    ).filter((key): key is string => !!key?.startsWith(RUN_SUMMARY_KEY))
+    const rows = keys
+      .map(key => {
+        try {
+          return {
+            key,
+            at:
+              Number(
+                JSON.parse(sessionStorage.getItem(key) ?? '{}').finishedAt,
+              ) || 0,
+          }
+        } catch {
+          return { key, at: 0 }
+        }
+      })
+      .sort((a, b) => b.at - a.at)
+    for (const [index, row] of rows.entries()) {
+      if (
+        index >= 10 ||
+        row.at > Date.now() ||
+        Date.now() - row.at > RUN_RETENTION
+      )
+        sessionStorage.removeItem(row.key)
+    }
+  } catch {
+    /* Session storage unavailable. */
+  }
+}
 let priceObserver: IntersectionObserver | null = null
 
 function limitedString(value: unknown): string | null {
@@ -63,17 +96,23 @@ export function captureRunCards(cards: unknown[], pack: number): RunCard[] {
 }
 
 export function saveRunSummary(summary: RunSummary): void {
+  summary = { ...summary, cards: summary.cards.slice(0, 500) }
   try {
-    sessionStorage.setItem(RUN_SUMMARY_KEY, JSON.stringify(summary))
+    sessionStorage.setItem(
+      RUN_SUMMARY_KEY + summary.accountId,
+      JSON.stringify(summary),
+    )
   } catch {
     /* Session storage unavailable. */
   }
+  cleanRunSummaries()
   renderRunSummary()
 }
 
 export function readRunSummary(): RunSummary | null {
+  cleanRunSummaries()
   try {
-    const raw = sessionStorage.getItem(RUN_SUMMARY_KEY)
+    const raw = sessionStorage.getItem(RUN_SUMMARY_KEY + getAccountId())
     if (!raw) return null
     const value = JSON.parse(raw) as Partial<RunSummary>
     if (
@@ -83,7 +122,10 @@ export function readRunSummary(): RunSummary | null {
       !Number.isSafeInteger(value.opened) ||
       (value.opened ?? -1) < 0 ||
       typeof value.detail !== 'string' ||
-      typeof value.finishedAt !== 'number'
+      typeof value.finishedAt !== 'number' ||
+      !Number.isFinite(value.finishedAt) ||
+      value.finishedAt > Date.now() ||
+      Date.now() - value.finishedAt > RUN_RETENTION
     )
       return null
     const cards = Array.isArray(value.cards)
@@ -109,7 +151,10 @@ export function setRunSummaryExpanded(expanded: boolean): void {
   if (!summary || summary.expanded === expanded) return
   summary.expanded = expanded
   try {
-    sessionStorage.setItem(RUN_SUMMARY_KEY, JSON.stringify(summary))
+    sessionStorage.setItem(
+      RUN_SUMMARY_KEY + summary.accountId,
+      JSON.stringify(summary),
+    )
   } catch {
     /* Session storage unavailable. */
   }

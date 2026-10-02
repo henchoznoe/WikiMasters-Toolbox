@@ -1,10 +1,12 @@
 import { getAccountId, onAccountChange, setAccountId } from './content/account'
+import { cleanCaches, onCacheChange } from './content/cache'
 import {
   getCollectionState,
   invalidateCollection,
   observeCollection,
   onCollectionChange,
   refreshCollectionIfNeeded,
+  stopCollectionLoad,
   syncCollectionFromStorage,
 } from './content/collection'
 import {
@@ -12,6 +14,12 @@ import {
   setDiscardRefreshCallback,
 } from './content/collection-actions'
 import { renderCollectionPanel } from './content/collection-panel'
+import {
+  onCompatibilityChange,
+  resetCompatibility,
+  setCompatibilityIssue,
+} from './content/compatibility'
+import { renderDataControls } from './content/data-panel'
 import { renderMarketPanel, resetMarketPanel } from './content/market-panel'
 import {
   cancelMarketReads,
@@ -30,7 +38,11 @@ import {
   syncPrefsFromStorage,
 } from './content/packs'
 import { refreshPacksControls } from './content/packs-panel'
-import { syncToolboxPanel } from './content/panel'
+import {
+  resetToolboxPanel,
+  resolvePanelPage,
+  syncToolboxPanel,
+} from './content/panel'
 import {
   closePriceInspector,
   renderPriceInspector,
@@ -38,13 +50,14 @@ import {
 import { renderPricePanel } from './content/price-panel'
 import { cancelPriceBatch, syncPricesFromStorage } from './content/price-store'
 import {
-  hydrateRoute,
+  cancelRouteRead,
   registerCards,
   renderCards,
   renderMarketplace,
   resetRegisteredCards,
   setPriceRenderCallback,
 } from './content/prices'
+import { cancelRequests, setRequestCallback } from './content/requests'
 import { toolboxPages } from './content/routes'
 import { renderRunSummary } from './content/run-summary'
 import {
@@ -79,9 +92,16 @@ function scheduleRender(): void {
     renderPricePanel()
     renderPriceInspector()
     renderMarketPanel()
+    renderDataControls()
   }, 80)
 }
+function readRoute(): void {
+  void resolvePanelPage(location.pathname, toolboxPages)?.read?.()
+}
 setPriceRenderCallback(scheduleRender)
+setRequestCallback(scheduleRender)
+onCompatibilityChange(scheduleRender)
+onCacheChange(scheduleRender)
 setMarketCallback(scheduleRender)
 setSaleCallback(scheduleRender)
 onSelectionChange(scheduleRender)
@@ -93,11 +113,14 @@ onCollectionChange(() => {
   scheduleRender()
 })
 onAccountChange(() => {
+  cancelRouteRead()
+  resetToolboxPanel()
+  cleanCaches()
   cancelPriceBatch()
   resetMarketPanel()
   closePriceInspector()
   resetRegisteredCards()
-  void hydrateRoute()
+  readRoute()
   registerCards([...getCollectionState().cards])
   renderStats()
   renderRunSummary()
@@ -121,12 +144,23 @@ if (!contentWindow.__wmToolboxContentInstalled) {
         history?: unknown
         status?: unknown
         auctionId?: unknown
+        source?: string
+        compatible?: boolean
       }
       if (data.kind === 'account') {
         setAccountId(data.accountId)
         return
       }
       if (data.accountId !== getAccountId()) return
+      if (data.kind === 'compatibility' && typeof data.source === 'string') {
+        setCompatibilityIssue(
+          data.source,
+          data.compatible === true
+            ? null
+            : `${data.source} data format changed; reload the page`,
+        )
+        return
+      }
       if (data.kind === 'sale-context') {
         observeSaleCard(data.card)
         return
@@ -136,6 +170,10 @@ if (!contentWindow.__wmToolboxContentInstalled) {
         return
       }
       if (data.kind === 'sale-adapter-error') {
+        setCompatibilityIssue(
+          'sale-ui',
+          'Sale controls changed; Toolbox actions paused',
+        )
         requireSaleCheck()
         return
       }
@@ -182,25 +220,30 @@ if (!contentWindow.__wmToolboxContentInstalled) {
       scheduleDailyReset()
       return
     }
-    if (event.key === MANUAL_LIMIT_KEY) {
+    if (event.key === MANUAL_LIMIT_KEY + getAccountId()) {
       syncManualLimitFromStorage()
       refreshPacksControls()
       return
     }
-    if (event.key !== AUTO_KEY) return
+    if (event.key !== AUTO_KEY + getAccountId()) return
     syncPrefsFromStorage()
     refreshPacksControls()
   })
-  let previousPath = location.pathname
+  let previousPath = location.pathname + location.search
   const observer = new MutationObserver(() => {
-    if (location.pathname !== previousPath) {
+    if (location.pathname + location.search !== previousPath) {
+      cancelRouteRead()
+      cancelRequests()
+      stopCollectionLoad()
+      resetRegisteredCards()
+      resetCompatibility()
       cancelPriceBatch()
       cancelMarketReads()
       leaveMarket()
       resetMarketPanel()
       closePriceInspector()
-      previousPath = location.pathname
-      void hydrateRoute()
+      previousPath = location.pathname + location.search
+      readRoute()
       if (/^\/collection(\/|$)/.test(previousPath))
         refreshCollectionIfNeeded(true)
     }
@@ -211,9 +254,10 @@ if (!contentWindow.__wmToolboxContentInstalled) {
       requestAnimationFrame(start)
       return
     }
+    cleanCaches()
     observer.observe(document.body, { childList: true, subtree: true })
     scheduleRender()
-    void hydrateRoute()
+    readRoute()
     scheduleDailyReset()
     if (getPrefs().enabled) scheduleAuto()
   }

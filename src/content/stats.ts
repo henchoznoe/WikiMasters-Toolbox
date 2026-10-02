@@ -8,7 +8,6 @@ type PackStats = {
 }
 
 export const STATS_PREFIX = 'wm_toolbox_pack_stats_v2:'
-const LEGACY_STATS_KEY = 'wm_toolbox_pack_stats_v1'
 const RARITIES = ['L', 'UR', 'SR', 'R', 'PC', 'C', 'Other'] as const
 
 export function statsStorageKey(accountId: string): string {
@@ -28,17 +27,6 @@ function emptyStats(dailyReset = false): PackStats {
   }
 }
 
-function legacyDailyReset(): boolean {
-  try {
-    const raw = localStorage.getItem(LEGACY_STATS_KEY)
-    return raw
-      ? (JSON.parse(raw) as Partial<PackStats>).dailyReset === true
-      : false
-  } catch {
-    return false
-  }
-}
-
 function writeStats(accountId: string, stats: PackStats): void {
   try {
     localStorage.setItem(statsStorageKey(accountId), JSON.stringify(stats))
@@ -51,7 +39,7 @@ export function readStats(accountId = getAccountId()): PackStats {
   if (!accountId) return emptyStats()
   try {
     const raw = localStorage.getItem(statsStorageKey(accountId))
-    if (!raw) return emptyStats(legacyDailyReset())
+    if (!raw) return emptyStats()
     const parsed = JSON.parse(raw) as Partial<PackStats>
     const stats: PackStats = {
       day: typeof parsed.day === 'string' ? parsed.day : localDay(),

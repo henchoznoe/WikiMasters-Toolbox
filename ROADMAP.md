@@ -28,11 +28,13 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 - [x] **DATA-02 · P0 · D3 — Index local de la collection complète.** Parcourir les pages de la collection à la demande, dédupliquer les résultats, conserver les copies distinctes et signaler clairement si l'index est partiel.
 - [x] **DATA-03 · P0 · D2 — Progression et annulation des chargements longs.** Montrer pages/cartes chargées, arrêt volontaire, erreurs et état final ; reprendre sans recommencer les pages déjà valides.
 - [x] **DATA-04 · P0 · D3 — Synchronisation après une action du jeu.** Actualiser l'index local après ouverture de paquet, vente, échange, défausse ou changement de compte, sans laisser de copies fantômes.
-- [ ] **DATA-05 · P0 · D2 — Partition stricte par compte.** Attacher index, favoris locaux, listes, statistiques et réglages sensibles au compte détecté ; empêcher l'affichage des données d'un ancien compte.
-- [ ] **DATA-06 · P1 · D2 — Cache borné et inspectable.** Définir TTL par type de donnée, limite de taille, nettoyage et bouton pour voir la date de synchronisation et vider un cache précis.
-- [ ] **DATA-07 · P1 · D2 — Gestion commune des requêtes.** Centraliser concurrence, délais, `429`, erreurs temporaires, annulation et nouvelle tentative afin que les vues partagent la même politique.
-- [ ] **DATA-08 · P1 · D3 — Adaptateurs de pages.** Donner à chaque route un module de lecture et un module Toolbox via le registre existant, avec remontage propre après navigation SPA et modales.
-- [ ] **DATA-09 · P1 · D3 — Détection des changements du jeu.** Tester les sélecteurs et formats d'API critiques ; afficher un état dégradé compréhensible si le site change, sans actions sur une mauvaise carte.
+- [x] **DATA-05 · P0 · D2 — Partition stricte par compte.** Attacher index, favoris locaux, listes, statistiques et réglages sensibles au compte détecté ; empêcher l'affichage des données d'un ancien compte.
+- [x] **DATA-06 · P1 · D2 — Cache borné et inspectable.** Définir TTL par type de donnée, limite de taille, nettoyage et bouton pour voir la date de synchronisation et vider un cache précis.
+- [x] **DATA-07 · P1 · D2 — Gestion commune des requêtes.** Centraliser concurrence, délais, `429`, erreurs temporaires, annulation et nouvelle tentative afin que les vues partagent la même politique.
+- [x] **DATA-08 · P1 · D3 — Adaptateurs de pages.** Donner à chaque route un module de lecture et un module Toolbox via le registre existant, avec remontage propre après navigation SPA et modales.
+- [x] **DATA-09 · P1 · D3 — Détection des changements du jeu.** Tester les sélecteurs et formats d'API critiques ; afficher un état dégradé compréhensible si le site change, sans actions sur une mauvaise carte.
+**DATA-05 à DATA-09 implémentés le 2 octobre 2026.** Réglages sensibles et récapitulatifs par compte, annulation des réponses anciennes et remontage des contrôles ; caches bornés avec durée de fraîcheur/rétention, inspection et suppression par catégorie ; file commune avec budget, délais, pauses serveur et reprises de lectures bornées, sans répétition des écritures incertaines. Adaptateurs de lecture et panneaux associés pour collection, catalogue, marché, échanges et paquets ; contrats d'API et sélecteurs critiques vérifiés, avec état dégradé et blocage des actions si l'identité ou les protections deviennent indisponibles. Les statistiques et journaux restent des données durables, pas des caches expirants.
+
 - [ ] **DATA-10 · P2 · D3 — Sauvegarde des données locales.** Exporter/importer réglages, listes et statistiques dans un format versionné, sans inclure d'identifiants de session ni mélanger les comptes.
 
 ## 2. Prix, estimation et qualité du marché

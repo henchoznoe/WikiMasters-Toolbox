@@ -7,6 +7,15 @@ const networkWindow = window as Window & {
 }
 let accountId: string | null = null
 let accountEpoch = 0
+let allowCollectionAccount = true
+
+const incompatibleSources = new Set<string>()
+function compatibility(source: string, ok: boolean): void {
+  if (ok && !incompatibleSources.has(source)) return
+  if (ok) incompatibleSources.delete(source)
+  else incompatibleSources.add(source)
+  emit({ kind: 'compatibility', source, compatible: ok, accountId })
+}
 
 function emit(data: Record<string, unknown>): void {
   window.dispatchEvent(
@@ -47,6 +56,7 @@ function accountIdFromProfileUrl(url: URL): string | null {
 function setAccount(id: string | null): void {
   if (id !== accountId) {
     accountId = id
+    if (id) allowCollectionAccount = true
     accountEpoch += 1
   }
   emit({ kind: 'account', accountId })
@@ -112,8 +122,14 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
     }
     emit({ kind: 'collection-changed', accountId })
   }
-  if (!json || typeof json !== 'object' || url.origin !== location.origin)
+  if (url.origin !== location.origin) return
+  if (!json || typeof json !== 'object' || Array.isArray(json)) {
+    if (url.pathname === '/api/my-collection')
+      compatibility('collection', false)
+    else if (url.pathname === '/api/cards') compatibility('catalogue', false)
+    else if (url.pathname === '/api/trades') compatibility('trades', false)
     return
+  }
   const data = json as Record<string, unknown>
   if (
     url.pathname === '/api/marketplace' &&
@@ -159,7 +175,13 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
         return typeof owner === 'string' ? [owner.toLowerCase()] : []
       }),
     )
-    if (owners.size === 1 && !accountId) setAccount([...owners][0])
+    if (
+      owners.size === 1 &&
+      !accountId &&
+      allowCollectionAccount &&
+      /^[0-9a-f-]{36}$/i.test([...owners][0])
+    )
+      setAccount([...owners][0])
     if (
       owners.size > 1 ||
       (owners.size === 1 && !owners.has(accountId as string))
@@ -192,11 +214,38 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
     kind = 'pack'
     raw = data.cards
   }
+  if (
+    !kind &&
+    !url.search &&
+    [
+      '/api/my-collection',
+      '/api/cards',
+      '/api/trades',
+      '/api/packs/open',
+    ].includes(url.pathname)
+  ) {
+    compatibility(
+      url.pathname === '/api/my-collection'
+        ? 'collection'
+        : url.pathname === '/api/cards'
+          ? 'catalogue'
+          : url.pathname === '/api/trades'
+            ? 'trades'
+            : 'pack',
+      false,
+    )
+    return
+  }
   if (kind) {
-    const cards = raw
-      .map(row => mapCard(row, kind === 'collection' || kind === 'pack'))
-      .filter((card): card is Card => card !== null)
-    emit({ kind, cards, accountId })
+    const mapped = raw.map(row =>
+      mapCard(row, kind === 'collection' || kind === 'pack'),
+    )
+    if (mapped.some(card => !card)) {
+      compatibility(kind, false)
+      return
+    }
+    compatibility(kind, true)
+    emit({ kind, cards: mapped as Card[], accountId })
   }
 }
 
@@ -233,11 +282,25 @@ function inspectPackVerification(url: URL, json: unknown, epoch: number): void {
 if (!networkWindow.__wmToolboxNetworkInstalled) {
   networkWindow.__wmToolboxNetworkInstalled = true
   installNativeMarket(() => accountId, emit)
+  function inspectAccountRequest(url: URL): void {
+    if (
+      url.hostname.endsWith('.supabase.co') &&
+      (url.pathname === '/auth/v1/logout' ||
+        (url.pathname === '/auth/v1/token' &&
+          url.searchParams.get('grant_type') !== 'refresh_token'))
+    ) {
+      allowCollectionAccount = false
+      accountEpoch += 1
+      incompatibleSources.clear()
+      setAccount(null)
+    }
+    const profile = accountIdFromProfileUrl(url)
+    if (profile && accountId && profile !== accountId) setAccount(null)
+  }
   const originalFetch = window.fetch.bind(window)
   window.fetch = (
     ...args: Parameters<typeof fetch>
   ): ReturnType<typeof fetch> => {
-    const promise = originalFetch(...args)
     const input = args[0]
     let url: URL
     try {
@@ -246,8 +309,10 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
         location.origin,
       )
     } catch {
-      return promise
+      return originalFetch(...args)
     }
+    inspectAccountRequest(url)
+    const promise = originalFetch(...args)
     const method =
       args[1]?.method ?? (input instanceof Request ? input.method : 'GET')
     const epoch = accountEpoch
@@ -327,6 +392,7 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
   ): void {
     const request = requests.get(this)
     if (request && isRelevant(request.url, request.method)) {
+      inspectAccountRequest(request.url)
       request.epoch = accountEpoch
       this.addEventListener(
         'load',
