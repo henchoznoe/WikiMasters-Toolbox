@@ -510,3 +510,15 @@ test('background diagnostics stay on their affected route and native count respo
     false,
   )
 })
+
+test('non-JSON HTTP errors preserve not-found prices and server status rather than claiming a format change', async () => {
+  const f = fixture(async () => new Response('Not found', { status: 404 }))
+  const c = await expose(f.context, {
+    'content/price-store': 'requestPriceQuote,readPriceQuote',
+    'content/requests': 'requestJson',
+  })
+  await c.requestPriceQuote('synthetic-missing')
+  assert.equal(c.readPriceQuote('synthetic-missing', 'R').status, 'not-found')
+  c.fetch = async () => new Response('Temporarily unavailable', { status: 503 })
+  await assert.rejects(c.requestJson('/api/collection'), /HTTP 503/)
+})

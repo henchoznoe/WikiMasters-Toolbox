@@ -204,7 +204,9 @@ export async function requestData(
       try {
         json = await response.json()
       } catch {
-        throw new Error('Game response changed; reload the page')
+        if (response.ok)
+          throw new Error('Game response changed; reload the page')
+        json = null
       }
       if (request.signal.aborted) throw request.signal.reason
       return { response, json }
