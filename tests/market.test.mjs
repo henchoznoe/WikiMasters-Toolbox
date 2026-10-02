@@ -513,3 +513,31 @@ test('a committed copy remains unsellable even after acknowledging protections',
   assert.equal(c.getSaleState().checked, false)
   assert.equal(c.getSaleState().error, 'Copy in a sale / trade')
 })
+
+test('sale applies the retained-copy rule independently of the discard selection', async () => {
+  const rows = [ownRow(), { ...ownRow(), id: 'copy-b' }]
+  const ctx = saleContext(async url =>
+    url.includes('/stats')
+      ? json({ total: 2 })
+      : url.includes('/api/my-collection?')
+        ? json({ collection: rows })
+        : url.includes('/api/trades')
+          ? json({ trades: [] })
+          : json({ mine: true, selling: [], history: [] }),
+  )
+  const c = await expose(
+    'content/sale',
+    saleNames,
+    ctx,
+    accountExtra +
+      "; import {editSelection} from './src/content/collection-actions.ts'; globalThis.editSelection=editSelection",
+  )
+  c.setAccountId(OWNER)
+  c.observeSaleCard(CARD)
+  c.editSelection(rules => {
+    rules.keep = 2
+  })
+  await c.checkSale(false)
+  assert.match(c.getSaleState().error, /Keep 2/)
+  assert.equal(c.getSaleState().checked, false)
+})
