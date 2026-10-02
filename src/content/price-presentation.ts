@@ -1,3 +1,4 @@
+import { type PriceContext, priceTooOld } from './price-context'
 import type { PriceQuote } from './price-store'
 
 export function formatPriceAge(fetchedAt: number, now = Date.now()): string {
@@ -23,7 +24,10 @@ type PricePresentation = {
   hint: string
 }
 
-export function presentPrice(quote: PriceQuote): PricePresentation {
+export function presentPrice(
+  quote: PriceQuote,
+  context: PriceContext = 'album',
+): PricePresentation {
   if (quote.status === 'loading')
     return {
       status: 'loading',
@@ -56,17 +60,22 @@ export function presentPrice(quote: PriceQuote): PricePresentation {
       hint: 'Card rarity unknown · no price inferred from another rarity',
     }
   const age = formatPriceAge(quote.fetchedAt)
+  const decisionOld = context === 'decision' && priceTooOld(quote, context)
+  const decisionHint =
+    context === 'decision'
+      ? ` · sale/trade freshness: 15 min${decisionOld ? ' · refresh before deciding' : ''}`
+      : ''
   if (quote.status === 'no-sales')
     return {
       status: quote.status,
       value: quote.failed ? '!' : '—',
       age,
-      hint: `No sales data for this rarity · checked ${checked}${quote.stale ? ' · stale observation' : ''}${quote.failed ? ` · refresh failed · last attempt ${priceCheckDate(quote.lastAttempt ?? quote.fetchedAt)}` : ''}`,
+      hint: `No sales data for this rarity · checked ${checked}${quote.stale ? ' · stale observation' : ''}${decisionHint}${quote.failed ? ` · refresh failed · last attempt ${priceCheckDate(quote.lastAttempt ?? quote.fetchedAt)}` : ''}`,
     }
   return {
     status: quote.status,
-    value: `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(quote.average)} W${quote.failed ? ' !' : ''}`,
+    value: `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(quote.average)} W${quote.failed ? ' !' : decisionOld ? ' ↻' : ''}`,
     age,
-    hint: `Average sale price for this rarity · checked ${checked} · source period not specified by WikiMasters · average only · volume and dispersion unavailable${quote.stale ? ' · stale price' : ''}${quote.failed ? ` · refresh failed · last attempt ${priceCheckDate(quote.lastAttempt ?? quote.fetchedAt)}` : ''}`,
+    hint: `Average sale price for this rarity · checked ${checked} · source period not specified by WikiMasters · average only · volume and dispersion unavailable${quote.stale ? ' · stale price' : ''}${decisionHint}${quote.failed ? ` · refresh failed · last attempt ${priceCheckDate(quote.lastAttempt ?? quote.fetchedAt)}` : ''}`,
   }
 }

@@ -1,5 +1,6 @@
 import { type Card, mapCard } from './cards'
 import { mapAuction } from './content/market-model'
+import { saleSample } from './content/sales-model'
 import { installNativeMarket } from './native-market'
 
 const networkWindow = window as Window & {
@@ -131,6 +132,21 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
     return
   }
   const data = json as Record<string, unknown>
+  if (
+    url.pathname === '/api/marketplace' ||
+    /^\/api\/marketplace\/[0-9a-f-]{36}$/i.test(url.pathname)
+  ) {
+    const rows = [
+      ...(Array.isArray(data.history) ? data.history : []),
+      ...(Array.isArray(data.auctions) ? data.auctions : []),
+      ...(data.auction ? [data.auction] : []),
+    ]
+    const samples = rows
+      .slice(0, 1000)
+      .map(row => saleSample(row))
+      .filter(Boolean)
+    if (samples.length) emit({ kind: 'sale-samples', accountId, samples })
+  }
   if (
     url.pathname === '/api/marketplace' &&
     data.mine === true &&

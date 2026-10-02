@@ -5,12 +5,15 @@ import {
   stopCollectionLoad,
 } from './collection'
 import { getSelectionState } from './collection-actions'
+import { collectionValue } from './collection-value'
 import {
   createMarketControls,
   createRankingControls,
   renderMarketPanel,
 } from './market-panel'
 import { createPriceControls } from './price-panel'
+import { formatPriceAge } from './price-presentation'
+import { readPriceQuote, startPriceBatch } from './price-store'
 import { registerCards } from './prices'
 import {
   createSelectionControls,
@@ -60,6 +63,7 @@ export function createCollectionBody(): HTMLElement {
     note,
     createSelectionControls(),
     createPriceControls(),
+    createValueControls(),
     createRankingControls(),
     createMarketControls(),
   )
@@ -121,7 +125,72 @@ export function renderCollectionPanel(): void {
     : (state.error ?? '')
   note.hidden = !note.textContent
   renderSelectionPanel()
+  renderCollectionValue()
   renderMarketPanel()
+}
+
+function createValueControls(): HTMLElement {
+  const details = document.createElement('details')
+  details.className = 'wm-market-section'
+  const summary = document.createElement('summary')
+  summary.textContent = 'Collection value'
+  const body = document.createElement('div')
+  body.dataset.wmCollectionValue = '1'
+  const refresh = document.createElement('button')
+  refresh.type = 'button'
+  refresh.className = 'wm-quiet-button'
+  refresh.textContent = 'Load / refresh prices · max 50'
+  refresh.addEventListener('click', () => {
+    void startPriceBatch(getCollectionState().cards.map(card => card.id))
+  })
+  details.append(summary, body, refresh)
+  details.addEventListener('toggle', renderCollectionValue)
+  return details
+}
+
+function renderCollectionValue(): void {
+  const body = document
+    .querySelector('[data-wm-toolbox-panel="collection"]')
+    ?.shadowRoot?.querySelector<HTMLElement>('[data-wm-collection-value]')
+  if (!body || !(body.parentElement as HTMLDetailsElement).open) return
+  const state = getCollectionState()
+  const value = collectionValue(state.cards, readPriceQuote)
+  const share = (unknown: number, copies: number): string => {
+    const percent = copies ? (100 * unknown) / copies : 0
+    return percent > 0 && percent < 0.01
+      ? '<0.01'
+      : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(
+          percent,
+        )
+  }
+  const text = [
+    state.status === 'complete'
+      ? 'Full index'
+      : 'Loaded copies · partial index',
+    ...(
+      [
+        ['All copies', value.all],
+        ['Duplicates only', value.duplicates],
+      ] as const
+    ).map(
+      ([label, subtotal]) =>
+        `${label}: ${subtotal.total === null ? '— (total too large)' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(subtotal.total)} W · ${subtotal.copies - subtotal.unknown} / ${subtotal.copies} valued · ${subtotal.unknown} unvalued (${share(subtotal.unknown, subtotal.copies)}%)${subtotal.stale ? ` · ${subtotal.stale} stale / failed refresh` : ''}`,
+    ),
+    `Native rarity averages · shiny copies unvalued${value.oldest ? ` · oldest price ${formatPriceAge(value.oldest)}` : ''}`,
+  ]
+  const signature = JSON.stringify(text)
+  if (body.dataset.signature === signature) return
+  body.dataset.signature = signature
+  body.replaceChildren(
+    ...text.map(text => {
+      const note = document.createElement('p')
+      note.className = 'wm-note'
+      note.textContent = text
+      return note
+    }),
+  )
+  body.title =
+    'Indicative sum of known native averages; not guaranteed proceeds. Missing prices are excluded, never treated as zero. Shiny price is not separately exposed by the native summary. Duplicates retain one copy per catalogue ID, rarity and shiny variant, independently of protection rules.'
 }
 
 export function mountCollectionBody(): void {

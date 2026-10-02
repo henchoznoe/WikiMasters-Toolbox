@@ -87,9 +87,9 @@ export function renderDataControls(): void {
     button.addEventListener('click', () => {
       if (getAccountId() !== owner) return
       if (
-        item.kind === 'history' &&
+        (item.kind === 'history' || item.kind === 'sales') &&
         !window.confirm(
-          'Clear local price observations? Past observations cannot be restored.',
+          'Clear local price or sale observations? Past observations cannot be restored.',
         )
       )
         return

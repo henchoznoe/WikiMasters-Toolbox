@@ -1,11 +1,12 @@
 import { getCollectionState } from './collection'
 import { getSelectionState } from './collection-actions'
+import { currentPriceContext } from './price-context'
 import { RARITIES } from './price-model'
 import {
   cancelPriceBatch,
   canRefreshPrice,
   getPriceBatch,
-  needsPrice,
+  needsPriceForContext,
   priceRequestLimit,
   startPriceBatch,
 } from './price-store'
@@ -91,6 +92,7 @@ export function createPriceControls(): HTMLElement {
       cards.filter(card => active.has(card.rarity ?? '')).map(card => card.id),
       force.checked,
       Number(cap.value),
+      currentPriceContext(),
     )
   })
   const stop = document.createElement('button')
@@ -157,7 +159,9 @@ export function renderPricePanel(): void {
     ),
   ]
   const pending = ids.filter(id =>
-    force?.checked ? canRefreshPrice(id) : needsPrice(id),
+    force?.checked
+      ? canRefreshPrice(id)
+      : needsPriceForContext(id, currentPriceContext()),
   ).length
   const limit = priceRequestLimit()
   text.textContent =
@@ -165,6 +169,10 @@ export function renderPricePanel(): void {
       ? `${state.done} / ${state.total} · ${state.running ? '…' : state.cancelled ? 'stopped' : state.done < state.total ? 'paused' : '✓'}${state.failed ? ` · ${state.failed} !` : ''}${state.skipped ? ` · ${state.skipped} skipped` : ''}${limit ? ` · ${limit}` : ''}`
       : `${pending} / ${ids.length} cards${limit ? ` · ${limit}` : ''}`
   text.title = `Summary only · 1 request / 650 ms · 200 / hour per tab · refresh ≥1 min · collection scope uses the currently loaded index (${getCollectionState().status}) · Stop finishes the current read; queued automatic visible-card reads are independent.`
+  start.textContent =
+    currentPriceContext() === 'decision' ? 'Refresh before decision' : 'Load'
+  text.title +=
+    ' · album: 24 h; sale/trade: 15 min · only prices older than this threshold are refreshed unless Refresh cached prices is selected.'
   start.disabled = state.running || !pending || !!limit
   stop.hidden = !state.running
   progress.hidden = !state.running

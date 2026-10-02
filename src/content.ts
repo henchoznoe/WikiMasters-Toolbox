@@ -67,6 +67,8 @@ import {
   requireSaleCheck,
   setSaleCallback,
 } from './content/sale'
+import { type SaleSample, validSample } from './content/sales-model'
+import { observeSaleSamples, SALES_PREFIX } from './content/sales-store'
 import { isCard } from './content/shared'
 import {
   recordPack,
@@ -146,12 +148,22 @@ if (!contentWindow.__wmToolboxContentInstalled) {
         auctionId?: unknown
         source?: string
         compatible?: boolean
+        samples?: unknown[]
       }
       if (data.kind === 'account') {
         setAccountId(data.accountId)
         return
       }
       if (data.accountId !== getAccountId()) return
+      if (data.kind === 'sale-samples' && Array.isArray(data.samples)) {
+        observeSaleSamples(
+          data.samples
+            .slice(0, 1000)
+            .filter((row): row is SaleSample => validSample(row)),
+        )
+        scheduleRender()
+        return
+      }
       if (data.kind === 'compatibility' && typeof data.source === 'string') {
         setCompatibilityIssue(
           data.source,
@@ -215,6 +227,8 @@ if (!contentWindow.__wmToolboxContentInstalled) {
   window.addEventListener('storage', event => {
     syncCollectionFromStorage(event.key)
     syncPricesFromStorage(event.key)
+    if (!event.key || event.key === SALES_PREFIX + getAccountId())
+      scheduleRender()
     if (event.key === `${STATS_PREFIX}${getAccountId()}`) {
       renderStats()
       scheduleDailyReset()

@@ -2,6 +2,8 @@ import { type Card, cardVariantKey } from '../cards'
 import { getAccountId, onAccountChange } from './account'
 import { type Auction, mapAuction } from './market-model'
 import { requestMarketJson } from './price-store'
+import { saleSample } from './sales-model'
+import { observeSaleSamples } from './sales-store'
 
 type Listings = {
   rows: Auction[]
@@ -44,7 +46,7 @@ export function resetMarket(): void {
   notify()
 }
 onAccountChange(resetMarket)
-export function observeMarket(json: unknown): void {
+export function observeMarket(json: unknown, collectSamples = true): void {
   if (!getAccountId() || !json || typeof json !== 'object') return
   const data = json as Record<string, unknown>
   if (
@@ -54,6 +56,13 @@ export function observeMarket(json: unknown): void {
   )
     return
   // Seller/bidder profiles are deliberately dropped by the mapper.
+  if (collectSamples)
+    observeSaleSamples(
+      data.history.slice(0, 1000).flatMap(row => {
+        const sample = saleSample(row)
+        return sample ? [sample] : []
+      }),
+    )
   const active = data.selling
     .map(mapAuction)
     .filter((row): row is Auction => !!row)
@@ -109,7 +118,12 @@ export function observeMarketSales(selling: unknown, history: unknown): void {
           ]
         })
       : []
-  observeMarket({ mine: true, selling: raw(selling), history: raw(history) })
+  // Mapped cards may default an absent shiny flag to false. Only the separately
+  // validated sale-samples event is allowed to populate completed observations.
+  observeMarket(
+    { mine: true, selling: raw(selling), history: raw(history) },
+    false,
+  )
 }
 export function chooseComparables(card: Card): void {
   if (target && cardVariantKey(target) === cardVariantKey(card)) return
