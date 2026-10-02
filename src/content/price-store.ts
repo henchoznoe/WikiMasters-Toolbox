@@ -285,11 +285,29 @@ function pump(): void {
       pump()
     })
 }
-async function get(url: string): Promise<Response> {
-  const response = await fetch(url, {
-    credentials: 'include',
-    signal: AbortSignal.timeout(12_000),
-  })
+async function get(url: string, signal?: AbortSignal): Promise<Response> {
+  let response: Response
+  if (!signal)
+    response = await fetch(url, {
+      credentials: 'include',
+      signal: AbortSignal.timeout(12_000),
+    })
+  else {
+    const request = new AbortController()
+    const abort = (): void => request.abort()
+    if (signal?.aborted) request.abort()
+    signal?.addEventListener('abort', abort, { once: true })
+    const timeout = setTimeout(abort, 12_000)
+    try {
+      response = await fetch(url, {
+        credentials: 'include',
+        signal: request.signal,
+      })
+    } finally {
+      clearTimeout(timeout)
+      signal?.removeEventListener('abort', abort)
+    }
+  }
   if (response.status >= 500) cooldown = Date.now() + 30_000
   if (response.status === 429) {
     const seconds = Number(response.headers.get('Retry-After'))
@@ -302,6 +320,52 @@ async function get(url: string): Promise<Response> {
   }
   saveBudget()
   return response
+}
+
+/** Market reads share the price queue, hourly budget, timeout and server pauses. */
+const marketReads = new Map<string, Promise<Record<string, unknown>>>()
+export async function requestMarketJson(
+  url: string,
+  signal: AbortSignal,
+): Promise<Record<string, unknown>> {
+  const existing = marketReads.get(url)
+  if (existing) {
+    const result = await existing
+    if (signal.aborted) throw new Error('Stopped')
+    return result
+  }
+  const reading = readMarketJson(url, signal)
+  marketReads.set(url, reading)
+  try {
+    return await reading
+  } finally {
+    if (marketReads.get(url) === reading) marketReads.delete(url)
+  }
+}
+async function readMarketJson(
+  url: string,
+  signal: AbortSignal,
+): Promise<Record<string, unknown>> {
+  let result: Record<string, unknown> | undefined
+  let failure: unknown
+  await schedule(`market:${url}`, async () => {
+    if (signal.aborted) return
+    try {
+      const response = await get(url, signal)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const json: unknown = await response.json()
+      if (!json || typeof json !== 'object' || Array.isArray(json))
+        throw new Error('Invalid market response')
+      result = json as Record<string, unknown>
+    } catch (cause) {
+      failure = cause
+    }
+  })
+  if (signal.aborted) throw new Error('Stopped')
+  if (failure) throw failure
+  if (!result)
+    throw new Error(priceRequestLimit() || 'Read already in progress')
+  return result
 }
 export function requestPriceQuote(id: string, force = false): Promise<void> {
   if (!id || id.length > 200) return Promise.resolve()

@@ -19,7 +19,6 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 2. Construire la sélection avancée et la défausse par rareté, avec simulation et confirmation (**COL-01 à COL-05**).
 3. Étendre le moteur de prix aux vues globales, aux échanges et aux ventes, en montrant la qualité des données (**PRICE-01 à PRICE-06**).
 4. Ajouter le classement des cartes de la collection et les aides à la vente sans multiplier les requêtes inutiles (**COL-14, MARKET-01 à MARKET-05**).
-5. Créer les familles de cartes et la liste de manquantes, puis les relier au marché (**FAM-01 à FAM-09**).
 
 ## 1. Données, identité et fiabilité
 
@@ -34,7 +33,7 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 - [ ] **DATA-07 · P1 · D2 — Gestion commune des requêtes.** Centraliser concurrence, délais, `429`, erreurs temporaires, annulation et nouvelle tentative afin que les vues partagent la même politique.
 - [ ] **DATA-08 · P1 · D3 — Adaptateurs de pages.** Donner à chaque route un module de lecture et un module Toolbox via le registre existant, avec remontage propre après navigation SPA et modales.
 - [ ] **DATA-09 · P1 · D3 — Détection des changements du jeu.** Tester les sélecteurs et formats d'API critiques ; afficher un état dégradé compréhensible si le site change, sans actions sur une mauvaise carte.
-- [ ] **DATA-10 · P2 · D3 — Sauvegarde des données locales.** Exporter/importer réglages, familles, listes et statistiques dans un format versionné, sans inclure d'identifiants de session ni mélanger les comptes.
+- [ ] **DATA-10 · P2 · D3 — Sauvegarde des données locales.** Exporter/importer réglages, listes et statistiques dans un format versionné, sans inclure d'identifiants de session ni mélanger les comptes.
 
 ## 2. Prix, estimation et qualité du marché
 
@@ -73,7 +72,7 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 - [ ] **COL-11 · P1 · D3 — Étiquettes en lot.** Ajouter ou retirer une étiquette sur une sélection, avec aperçu des changements et respect des étiquettes préexistantes.
 - [ ] **COL-12 · P1 · D2 — Favoris en lot.** Ajouter/retirer des favoris sans toucher les cartes déjà protégées par une autre règle.
 - [ ] **COL-13 · P1 · D3 — Inventaire des cartes manquantes.** Croiser collection et catalogue global par ID, rareté et variantes pour afficher progression et manquantes réelles.
-- [ ] **COL-14 · P1 · D2 — Liste « plus chères ».** Classement paginé issu de l'index local, signalement des prix absents et raccourci vers la fiche de la carte.
+- [x] **COL-14 · P1 · D2 — Liste « plus chères ».** Classement paginé issu de l'index local, signalement des prix absents et raccourci vers la fiche de la carte.
 - [ ] **COL-15 · P2 · D2 — Statistiques de l'album.** Répartition des raretés, cartes uniques, doublons, favoris, étiquettes et progression du catalogue.
 - [ ] **COL-16 · P2 · D3 — Comparer deux instantanés.** Voir cartes gagnées/perdues et changement de quantités depuis une synchronisation choisie, avec stockage borné.
 - [ ] **COL-17 · P2 · D2 — Raccourcis de navigation.** Passer d'une carte possédée à sa page Wikipédia, au catalogue global, au marché et aux échanges associés quand les liens sont fiables.
@@ -81,11 +80,13 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 
 ## 4. Marché et mises en vente
 
-- [ ] **MARKET-01 · P0 · D3 — Aide au prix de vente.** Dans le formulaire natif, afficher moyenne, fraîcheur, annonces comparables et écart au prix saisi, sans imposer un montant automatique.
-- [ ] **MARKET-02 · P0 · D3 — Identifier la copie vendable.** Résoudre l'ID de possession, vérifier qu'elle est toujours détenue et non déjà engagée, puis laisser le joueur confirmer la vente.
-- [ ] **MARKET-03 · P1 · D3 — Mes ventes dans Toolbox.** Rassembler annonces actives, prix de départ, meilleure offre, temps restant et résultat connu, avec liens vers les fiches du jeu.
-- [ ] **MARKET-04 · P1 · D3 — Vente depuis le classement/les doublons.** Préremplir une proposition de montant et de durée sur la copie choisie, puis passer par la confirmation native. **À valider :** flux officiel disponible.
-- [ ] **MARKET-05 · P1 · D3 — Comparables actifs.** Montrer les annonces de la même carte et rareté, triées par fin et par prix, en évitant les faux matchs de titres.
+**COL-14 et MARKET-01 à MARKET-05 implémentés le 2 octobre 2026.** Classement paginé par variante sur l’index local, copies identifiées et prix manquants explicites ; proposition de prix/durée dans le formulaire officiel, moyenne et fraîcheur, écart au prix saisi, contrôle de la collection complète et des engagements, accord pour les protections, verrou entre onglets et dernier journal par compte. Mes ventes rassemble les annonces actives et les résultats observés ; comparables à la demande, par ID de catalogue, rareté et shiny, tri local, recherche paginée limitée et état partiel. Les lectures partagent le budget et les pauses du moteur de prix. Classement, préparation native, préremplissage et protection d’un exemplaire unique vérifiés dans Chrome. Aucune vente réelle publiée pour ce lot ; résultats de vente, annulation et changements de compte couverts par les tests.
+
+- [x] **MARKET-01 · P0 · D3 — Aide au prix de vente.** Dans le formulaire natif, afficher moyenne, fraîcheur, annonces comparables et écart au prix saisi, sans imposer un montant automatique.
+- [x] **MARKET-02 · P0 · D3 — Identifier la copie vendable.** Résoudre l'ID de possession, vérifier qu'elle est toujours détenue et non déjà engagée, puis laisser le joueur confirmer la vente.
+- [x] **MARKET-03 · P1 · D3 — Mes ventes dans Toolbox.** Rassembler annonces actives, prix de départ, meilleure offre, temps restant et résultat connu, avec liens vers les fiches du jeu.
+- [x] **MARKET-04 · P1 · D3 — Vente depuis le classement/les doublons.** Préremplir une proposition de montant et de durée sur la copie choisie, puis passer par la confirmation native. Flux natif validé : ouverture de la copie identifiée, proposition appliquée uniquement à la demande, confirmation par le joueur.
+- [x] **MARKET-05 · P1 · D3 — Comparables actifs.** Montrer les annonces de la même carte et rareté, triées par fin et par prix, en évitant les faux matchs de titres.
 - [ ] **MARKET-06 · P1 · D3 — Liste de surveillance.** Enregistrer des cartes ou recherches, vérifier à la demande les annonces correspondantes et marquer celles déjà vues.
 - [ ] **MARKET-07 · P1 · D2 — Vue des bonnes affaires potentielles.** Filtrer les annonces sous un seuil de référence, avec mention explicite de la faible fiabilité possible des moyennes.
 - [ ] **MARKET-08 · P2 · D3 — Budget d'achat personnel.** Suivre un budget indicatif en W et le coût total des annonces surveillées, sans enchère ou achat automatique.
@@ -99,7 +100,7 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 - [ ] **TRADE-02 · P0 · D2 — Écart de valeur lisible.** Montrer différence absolue et relative avec un état « estimation partielle » si un seul prix manque.
 - [ ] **TRADE-03 · P1 · D3 — Cartes complètes dans l'aperçu.** Remplacer les titres tronqués par image, rareté et titre entier, sans modifier les données de l'offre.
 - [ ] **TRADE-04 · P1 · D3 — Aide à la composition.** Pendant la création, visualiser doublons disponibles, cartes protégées, valeur estimée et quantité restante après l'échange.
-- [ ] **TRADE-05 · P1 · D2 — Comparaison avec les manquantes.** Marquer les cartes reçues qui complètent l'album ou une famille, et celles déjà possédées en plusieurs exemplaires.
+- [ ] **TRADE-05 · P1 · D2 — Comparaison avec les manquantes.** Marquer les cartes reçues qui complètent l'album, et celles déjà possédées en plusieurs exemplaires.
 - [ ] **TRADE-06 · P1 · D3 — Historique personnel des échanges.** Conserver un résumé local des échanges vus ou conclus, sans supposer qu'une offre affichée a été acceptée.
 - [ ] **TRADE-07 · P2 · D3 — Liste de souhaits pour échanges.** Exporter une sélection de cartes recherchées et rapprocher les offres visibles de cette liste.
 - [ ] **TRADE-08 · P2 · D2 — Vérification avant acceptation.** Recharger les détails de l'offre et les prix au moment de la décision, signaler les modifications et laisser l'acceptation au joueur.
@@ -118,22 +119,7 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 - [ ] **PACK-09 · P2 · D2 — Réglages d'accessibilité des animations.** Réduire les effets visuels et respecter `prefers-reduced-motion` sans interférer avec l'ouverture native.
 - [ ] **PACK-10 · P1 · D3 — Partager l'ouverture en cours.** Copier ou télécharger une image du tirage sur `/pulls`, avec cartes, raretés et total optionnel ; choisir d'inclure le pseudo et réutiliser le rendu de CARD-04.
 
-## 7. Familles, objectifs de collection et catalogue
-
-- [ ] **FAM-01 · P1 · D4 — Familles personnelles.** Créer, nommer, modifier et supprimer des groupes de cartes persistés localement, indépendants des étiquettes du jeu.
-- [ ] **FAM-02 · P1 · D3 — Ajouter des cartes depuis le catalogue.** Recherche paginée par titre, catégorie et description, ajout/retrait unitaire et déduplication par ID.
-- [ ] **FAM-03 · P1 · D3 — Progression possédées/manquantes.** Synchroniser le nombre de copies détenues, afficher pourcentage, raretés et date de contrôle.
-- [ ] **FAM-04 · P1 · D2 — Filtres de famille.** Toutes, possédées, manquantes, non vérifiées, par rareté et par prix connu.
-- [ ] **FAM-05 · P1 · D2 — Carte de couverture.** Choisir une carte du groupe comme visuel, avec fallback lisible lorsqu'aucune image n'existe.
-- [ ] **FAM-06 · P1 · D3 — Import/export partageable.** Code compact versionné, validation stricte et taille maximale ; les possessions du compte ne sont jamais incluses dans le partage.
-- [ ] **FAM-07 · P1 · D3 — Recherche marché des manquantes.** À la demande, chercher les annonces par carte, vérifier l'ID final, trier par fin/prix et ouvrir la fiche native.
-- [ ] **FAM-08 · P2 · D3 — Recherche groupée des manquantes.** Progression, pause et reprises bornées pour une famille entière, avec cache court et plafonds de requêtes.
-- [ ] **FAM-09 · P2 · D3 — Objectifs de famille.** Fixer un nombre de copies ou une rareté cible par carte, puis montrer ce qui manque réellement à l'objectif.
-- [ ] **FAM-10 · P2 · D3 — Familles modèles.** Bibliothèque facultative de thèmes encyclopédiques vérifiés, importable dans des familles personnelles sans remplacer leurs modifications.
-- [ ] **FAM-11 · P2 · D3 — Comparer familles et échanges.** Signaler lorsqu'une offre, une annonce ou un tirage apporte une carte manquante d'une famille.
-- [ ] **FAM-12 · P2 · D2 — Vue album partageable.** Exporter une image ou une liste des cartes d'une famille, avec contrôle de la visibilité des possessions et des prix.
-
-## 8. Cartes, images et Wikipédia
+## 7. Cartes, images et Wikipédia
 
 - [ ] **CARD-01 · P1 · D1 — Raccourci Wikipédia.** Ouvrir l'article de la carte depuis la collection, le marché et la fiche, avec URL fournie par le jeu ou encodage sûr du titre.
 - [ ] **CARD-02 · P1 · D3 — Images manquantes.** Proposer une image pertinente depuis Wikimedia Commons/Wikidata quand le jeu n'en fournit pas, avec crédit, cache et choix de laisser le visuel natif.
@@ -146,7 +132,7 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 - [ ] **CARD-09 · P2 · D3 — Comparateur de cartes.** Deux à quatre cartes côte à côte pour rareté, ATK/DEF, prix, possession et liens Wikipédia.
 - [ ] **CARD-10 · P2 · D2 — Présentation adaptée au mobile.** Contrôler zoom, longs titres, contraste et placement des badges sur les petits écrans.
 
-## 9. Batailles, social et progression
+## 8. Batailles, social et progression
 
 - [ ] **GAME-01 · P1 · D3 — Préparation de duel.** Sur les cartes possédées, filtrer et comparer ATK/DEF et rareté pour aider le joueur à choisir manuellement son équipe.
 - [ ] **GAME-02 · P1 · D2 — Raccourci vers les règles des combats.** Expliquer les statistiques réellement utilisées et lier les règles officielles lorsqu'elles sont disponibles. **À valider :** formule exacte du jeu.
@@ -156,11 +142,11 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 - [ ] **GAME-06 · P2 · D3 — Contexte de guilde.** Résumer progression et classement de la guilde avec les seules données accessibles au membre.
 - [ ] **GAME-07 · P2 · D3 — Suivi des classements.** Conserver quelques positions publiques observées et leur date, puis afficher une tendance sans surveillance continue.
 - [ ] **GAME-08 · P2 · D2 — Son de notification optionnel.** Jouer un signal seulement quand le compteur visible augmente, avec volume/muet et respect des préférences du navigateur.
-- [ ] **GAME-09 · P2 · D3 — Centre d'alertes personnel.** Regrouper prix surveillés, enchères proches et objectifs de famille, avec lecture seule et réglages fins par type.
+- [ ] **GAME-09 · P2 · D3 — Centre d'alertes personnel.** Regrouper prix surveillés, enchères proches, avec lecture seule et réglages fins par type.
 
-## 10. Réglages, accessibilité, navigateurs et maintenance
+## 9. Réglages, accessibilité, navigateurs et maintenance
 
-- [ ] **UX-01 · P0 · D2 — Catalogue de modules.** Activer/désactiver cartes, prix, collection, marché, échanges, familles et notifications depuis une page de réglages cohérente.
+- [ ] **UX-01 · P0 · D2 — Catalogue de modules.** Activer/désactiver cartes, prix, collection, marché, échanges et notifications depuis une page de réglages cohérente.
 - [ ] **UX-02 · P0 · D2 — Toolbox par page utile.** Réutiliser le panneau dynamique existant sur collection, marché et échanges uniquement lorsqu'il apporte des actions ou un état pertinent.
 - [ ] **UX-03 · P1 · D2 — Préférences sans rechargement inutile.** Appliquer les bascules visuelles immédiatement et recharger seulement les modules qui l'exigent.
 - [ ] **UX-04 · P1 · D3 — Accessibilité clavier et lecteur d'écran.** Focus visibles, modales fermables, annonces d'état discrètes et libellés pour prix, progression et actions groupées.
@@ -181,7 +167,6 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 2. **Défausse sûre** : COL-01 à COL-05 ; commencer par l'analyse du flux natif et un aperçu sans action.
 3. **Prix exploitables** : PRICE-01 à PRICE-05, PRICE-09 et PRICE-10 ; afficher systématiquement les données manquantes.
 4. **Décisions de marché et d'échange** : MARKET-01 à MARKET-05, TRADE-01 à TRADE-05.
-5. **Album personnalisé** : FAM-01 à FAM-07, puis partage et recherche groupée.
 
 ## Références de travail
 

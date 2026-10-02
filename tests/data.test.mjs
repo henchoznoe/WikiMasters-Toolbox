@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import vm from 'node:vm'
 import { build } from 'esbuild'
+import { nativeMarketStubs } from './browser-stubs.mjs'
 
 const A = '11111111-1111-4111-8111-111111111111'
 const B = '22222222-2222-4222-8222-222222222222'
@@ -320,6 +321,7 @@ test('native mutations invalidate the current account and late login responses a
     URL,
     Request,
     location: { origin: 'https://www.wiki-masters.com' },
+    ...nativeMarketStubs(window),
     XMLHttpRequest: class {
       open() {}
       send() {}

@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import { build } from 'esbuild'
+import { nativeMarketStubs } from './browser-stubs.mjs'
 
 const dist = new URL('../dist/', import.meta.url)
 const root = fileURLToPath(new URL('../', import.meta.url))
@@ -117,6 +118,7 @@ test('the network bridge exposes only relevant card data and preserves fetch res
   vm.runInNewContext(code, {
     window,
     location: { origin: 'https://www.wiki-masters.com' },
+    ...nativeMarketStubs(window),
     XMLHttpRequest: FakeXHR,
     Request,
     CustomEvent: FakeEvent,
@@ -914,6 +916,7 @@ test('the bridge recognizes the current single-profile response and forwards onl
   vm.runInNewContext(await readFile(new URL('network.js', dist), 'utf8'), {
     window,
     location: { origin: 'https://www.wiki-masters.com' },
+    ...nativeMarketStubs(window),
     XMLHttpRequest: FakeXHR,
     Request,
     CustomEvent: FakeEvent,

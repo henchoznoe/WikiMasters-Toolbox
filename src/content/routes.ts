@@ -1,4 +1,10 @@
 import { cancelDiscard, leaveCollection } from './collection-actions'
+import {
+  createMarketBody,
+  renderMarketPanel,
+  resetMarketPanel,
+} from './market-panel'
+import { cancelMarketReads } from './market-store'
 import { clearOpenAllConfirmation, leavePacksPage } from './packs'
 import { createPacksBody, mountPacksBody } from './packs-panel'
 import type { ToolboxPage } from './panel'
@@ -8,6 +14,7 @@ import {
   renderPricePanel,
 } from './price-panel'
 import { cancelPriceBatch } from './price-store'
+import { leaveMarket } from './sale'
 
 export const toolboxPages: readonly ToolboxPage[] = [
   {
@@ -17,7 +24,25 @@ export const toolboxPages: readonly ToolboxPage[] = [
     createBody: createCollectionBody,
     onMount: mountCollectionBody,
     onHide: cancelDiscard,
-    onUnmount: leaveCollection,
+    onUnmount: () => {
+      leaveCollection()
+      cancelMarketReads()
+      leaveMarket()
+      resetMarketPanel()
+    },
+  },
+  {
+    id: 'market',
+    label: 'Market',
+    matches: path => /^\/marketplace(\/|$)/.test(path),
+    createBody: createMarketBody,
+    onMount: renderMarketPanel,
+    onUnmount: () => {
+      cancelPriceBatch()
+      cancelMarketReads()
+      leaveMarket()
+      resetMarketPanel()
+    },
   },
   {
     id: 'packs',
@@ -35,8 +60,7 @@ export const toolboxPages: readonly ToolboxPage[] = [
   {
     id: 'prices',
     label: 'Prices',
-    matches: path =>
-      /^\/(global-collection|marketplace|trades)(\/|$)/.test(path),
+    matches: path => /^\/(global-collection|trades)(\/|$)/.test(path),
     createBody: createPricesBody,
     onMount: renderPricePanel,
     onUnmount: cancelPriceBatch,

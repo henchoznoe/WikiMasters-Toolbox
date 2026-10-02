@@ -1,4 +1,6 @@
 import { type Card, mapCard } from './cards'
+import { mapAuction } from './content/market-model'
+import { installNativeMarket } from './native-market'
 
 const networkWindow = window as Window & {
   __wmToolboxNetworkInstalled?: boolean
@@ -12,6 +14,19 @@ function emit(data: Record<string, unknown>): void {
       detail: JSON.stringify(data),
     }),
   )
+}
+function failedSale(url: URL, method: string, epoch: number, status = 0): void {
+  if (
+    url.origin === location.origin &&
+    url.pathname === '/api/marketplace' &&
+    method.toUpperCase() === 'POST' &&
+    epoch === accountEpoch
+  )
+    emit({
+      kind: 'sale-result',
+      accountId,
+      status: status >= 400 && status < 500 ? 'rejected' : 'unknown',
+    })
 }
 
 function accountIdFromProfileUrl(url: URL): string | null {
@@ -83,11 +98,36 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
     return
   }
   if (isMutation(url, method)) {
+    if (
+      url.pathname === '/api/marketplace' &&
+      method.toUpperCase() === 'POST'
+    ) {
+      const result = json as Record<string, unknown> | null
+      emit({
+        kind: 'sale-result',
+        accountId,
+        status: typeof result?.auction_id === 'string' ? 'listed' : 'unknown',
+        auctionId: result?.auction_id,
+      })
+    }
     emit({ kind: 'collection-changed', accountId })
   }
   if (!json || typeof json !== 'object' || url.origin !== location.origin)
     return
   const data = json as Record<string, unknown>
+  if (
+    url.pathname === '/api/marketplace' &&
+    data.mine === true &&
+    Array.isArray(data.selling) &&
+    Array.isArray(data.history)
+  ) {
+    emit({
+      kind: 'market-sales',
+      accountId,
+      selling: data.selling.map(mapAuction).filter(Boolean),
+      history: data.history.map(mapAuction).filter(Boolean),
+    })
+  }
   if (
     url.pathname === '/api/my-collection/stats' &&
     !['q', 'rarity', 'tag_id', 'untagged', 'wishlisted_by'].some(key =>
@@ -192,6 +232,7 @@ function inspectPackVerification(url: URL, json: unknown, epoch: number): void {
 
 if (!networkWindow.__wmToolboxNetworkInstalled) {
   networkWindow.__wmToolboxNetworkInstalled = true
+  installNativeMarket(() => accountId, emit)
   const originalFetch = window.fetch.bind(window)
   window.fetch = (
     ...args: Parameters<typeof fetch>
@@ -214,6 +255,7 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
       void promise
         .then(async response => {
           if (response.status === 401 && url.origin === location.origin) {
+            failedSale(url, method, epoch, response.status)
             if (epoch === accountEpoch) setAccount(null)
             return
           }
@@ -244,8 +286,10 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
           ) {
             emit({ kind: 'collection-changed', accountId })
           }
+          if (!response.ok) failedSale(url, method, epoch, response.status)
         })
         .catch(() => {
+          failedSale(url, method, epoch)
           /* Leave the game's response untouched. */
           if (isMutation(url, method) && epoch === accountEpoch)
             emit({ kind: 'collection-changed', accountId })
@@ -288,6 +332,7 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
         'load',
         () => {
           if (this.status === 401 && request.url.origin === location.origin) {
+            failedSale(request.url, request.method, request.epoch, this.status)
             if (request.epoch === accountEpoch) setAccount(null)
             return
           }
@@ -299,6 +344,7 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
             emit({ kind: 'collection-changed', accountId })
           }
           if (this.status < 200 || this.status >= 300) {
+            failedSale(request.url, request.method, request.epoch, this.status)
             try {
               inspectPackVerification(
                 request.url,

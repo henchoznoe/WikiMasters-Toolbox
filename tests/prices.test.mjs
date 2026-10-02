@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import { build } from 'esbuild'
+import { nativeMarketStubs } from './browser-stubs.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 async function expose(module, names, context = {}) {
@@ -280,6 +281,7 @@ test('global, marketplace and trade adapters expose only canonical card metadata
   vm.runInNewContext(result.outputFiles[0].text, {
     window,
     location: { origin: 'https://www.wiki-masters.com' },
+    ...nativeMarketStubs(window),
     XMLHttpRequest: XHR,
     CustomEvent: Event,
     Request,

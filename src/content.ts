@@ -12,6 +12,13 @@ import {
   setDiscardRefreshCallback,
 } from './content/collection-actions'
 import { renderCollectionPanel } from './content/collection-panel'
+import { renderMarketPanel, resetMarketPanel } from './content/market-panel'
+import {
+  cancelMarketReads,
+  chooseComparables,
+  observeMarketSales,
+  setMarketCallback,
+} from './content/market-store'
 import {
   AUTO_KEY,
   getPrefs,
@@ -40,6 +47,13 @@ import {
 } from './content/prices'
 import { toolboxPages } from './content/routes'
 import { renderRunSummary } from './content/run-summary'
+import {
+  leaveMarket,
+  observeSaleCard,
+  observeSaleResult,
+  requireSaleCheck,
+  setSaleCallback,
+} from './content/sale'
 import { isCard } from './content/shared'
 import {
   recordPack,
@@ -64,9 +78,12 @@ function scheduleRender(): void {
     renderCollectionPanel()
     renderPricePanel()
     renderPriceInspector()
+    renderMarketPanel()
   }, 80)
 }
 setPriceRenderCallback(scheduleRender)
+setMarketCallback(scheduleRender)
+setSaleCallback(scheduleRender)
 onSelectionChange(scheduleRender)
 setDiscardRefreshCallback(() => {
   if (/^\/collection(\/|$)/.test(location.pathname)) location.reload()
@@ -77,6 +94,7 @@ onCollectionChange(() => {
 })
 onAccountChange(() => {
   cancelPriceBatch()
+  resetMarketPanel()
   closePriceInspector()
   resetRegisteredCards()
   void hydrateRoute()
@@ -98,12 +116,37 @@ if (!contentWindow.__wmToolboxContentInstalled) {
         cards?: unknown[]
         accountId?: unknown
         total?: unknown
+        card?: unknown
+        selling?: unknown
+        history?: unknown
+        status?: unknown
+        auctionId?: unknown
       }
       if (data.kind === 'account') {
         setAccountId(data.accountId)
         return
       }
       if (data.accountId !== getAccountId()) return
+      if (data.kind === 'sale-context') {
+        observeSaleCard(data.card)
+        return
+      }
+      if (data.kind === 'sale-check-required') {
+        requireSaleCheck()
+        return
+      }
+      if (data.kind === 'sale-adapter-error') {
+        requireSaleCheck()
+        return
+      }
+      if (data.kind === 'sale-result') {
+        observeSaleResult(data.status, data.auctionId)
+        return
+      }
+      if (data.kind === 'market-sales') {
+        observeMarketSales(data.selling, data.history)
+        return
+      }
       if (data.kind === 'pack-verification-required') {
         requirePackVerification()
         return
@@ -118,6 +161,8 @@ if (!contentWindow.__wmToolboxContentInstalled) {
       }
       if (Array.isArray(data.cards)) {
         const cards = data.cards.filter(isCard)
+        if (data.kind === 'marketplace' && cards.length === 1)
+          chooseComparables(cards[0])
         if (data.kind === 'collection') observeCollection(cards)
         registerCards(cards, data.kind)
         if (data.kind === 'pack' && cards.length) {
@@ -150,6 +195,9 @@ if (!contentWindow.__wmToolboxContentInstalled) {
   const observer = new MutationObserver(() => {
     if (location.pathname !== previousPath) {
       cancelPriceBatch()
+      cancelMarketReads()
+      leaveMarket()
+      resetMarketPanel()
       closePriceInspector()
       previousPath = location.pathname
       void hydrateRoute()
