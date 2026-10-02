@@ -8,6 +8,7 @@ type AutoPrefs = {
   minMinutes: number
   maxMinutes: number
   nextAt: number
+  verificationRequired: boolean
 }
 type PackResponse = {
   cards?: unknown[]
@@ -17,6 +18,7 @@ type PackResponse = {
   retry_after?: string
   error?: string
   message?: string
+  human_verification_required?: boolean
 }
 
 export const AUTO_KEY = 'wm_toolbox_auto_v1'
@@ -29,6 +31,7 @@ const DEFAULT_PREFS: AutoPrefs = {
   minMinutes: 20,
   maxMinutes: 100,
   nextAt: 0,
+  verificationRequired: false,
 }
 let prefs = readPrefs()
 let autoTimer: ReturnType<typeof setTimeout> | null = null
@@ -99,6 +102,7 @@ function readPrefs(): AutoPrefs {
       minMinutes,
       maxMinutes,
       nextAt: Math.max(0, Number(parsed.nextAt) || 0),
+      verificationRequired: parsed.verificationRequired === true,
     }
   } catch {
     return { ...DEFAULT_PREFS }
@@ -113,22 +117,52 @@ export function getStatus(): string {
   return statusText
 }
 
+const VERIFICATION_STATUS = 'Verification required · use the game’s Open button'
+class HumanVerificationError extends Error {}
+
+export function requirePackVerification(): void {
+  prefs = readPrefs()
+  prefs.verificationRequired = true
+  prefs.nextAt = 0
+  writePrefs()
+  if (autoTimer) clearTimeout(autoTimer)
+  autoTimer = null
+  runController?.abort(new HumanVerificationError(VERIFICATION_STATUS))
+  setStatus(VERIFICATION_STATUS)
+  updateOpenAllButton()
+}
+
+// A successful native opening confirms that the game's verification is complete.
+// The game manages its challenge and credentials; the Toolbox observes only cards.
+export function observeNativePack(): void {
+  prefs = readPrefs()
+  if (!prefs.verificationRequired) return
+  prefs.verificationRequired = false
+  prefs.nextAt = prefs.enabled ? Date.now() + randomDelay() : 0
+  writePrefs()
+  setStatus('Verification complete')
+  updateOpenAllButton()
+  if (prefs.enabled) scheduleAuto()
+}
+
 export function setAutoEnabled(enabled: boolean): void {
   prefs.enabled = enabled
-  prefs.nextAt = enabled ? Date.now() + randomDelay() : 0
+  prefs.nextAt =
+    enabled && !prefs.verificationRequired ? Date.now() + randomDelay() : 0
   writePrefs()
   if (!enabled) {
     if (autoTimer) clearTimeout(autoTimer)
     autoTimer = null
     if (runMode === 'auto') runController?.abort(new Error('Stopped by user'))
-    setStatus('Disabled')
+    setStatus(prefs.verificationRequired ? VERIFICATION_STATUS : 'Disabled')
   } else scheduleAuto()
 }
 
 export function setMinMinutes(value: number): void {
   prefs.minMinutes = Math.max(1, Math.min(10080, Math.round(value) || 20))
   prefs.maxMinutes = Math.max(prefs.maxMinutes, prefs.minMinutes)
-  if (prefs.enabled) prefs.nextAt = Date.now() + randomDelay()
+  if (prefs.enabled && !prefs.verificationRequired)
+    prefs.nextAt = Date.now() + randomDelay()
   writePrefs()
   if (prefs.enabled) scheduleAuto()
 }
@@ -138,13 +172,22 @@ export function setMaxMinutes(value: number): void {
     prefs.minMinutes,
     Math.min(10080, Math.round(value) || 100),
   )
-  if (prefs.enabled) prefs.nextAt = Date.now() + randomDelay()
+  if (prefs.enabled && !prefs.verificationRequired)
+    prefs.nextAt = Date.now() + randomDelay()
   writePrefs()
   if (prefs.enabled) scheduleAuto()
 }
 
 export function syncPrefsFromStorage(): void {
   prefs = readPrefs()
+  updateOpenAllButton()
+  if (prefs.verificationRequired) {
+    if (autoTimer) clearTimeout(autoTimer)
+    autoTimer = null
+    runController?.abort(new HumanVerificationError(VERIFICATION_STATUS))
+    setStatus(VERIFICATION_STATUS)
+    return
+  }
   if (!prefs.enabled) {
     if (autoTimer) clearTimeout(autoTimer)
     autoTimer = null
@@ -199,7 +242,10 @@ function setStatus(value: string): void {
   const status = document
     .querySelector<HTMLElement>('[data-wm-toolbox-panel]')
     ?.shadowRoot?.querySelector<HTMLElement>('[data-wm-toolbox-status]')
-  if (status) status.textContent = statusText
+  if (status) {
+    status.textContent = statusText
+    status.hidden = statusText === 'Disabled'
+  }
 }
 
 function schedulePassiveRetry(): void {
@@ -225,7 +271,7 @@ async function claimMissingSchedule(): Promise<void> {
         return
       }
       prefs = readPrefs()
-      if (!prefs.enabled) return
+      if (!prefs.enabled || prefs.verificationRequired) return
       if (prefs.nextAt === 0) {
         prefs.nextAt = Date.now() + randomDelay()
         writePrefs()
@@ -241,6 +287,10 @@ export function scheduleAuto(): void {
   if (autoTimer) clearTimeout(autoTimer)
   autoTimer = null
   prefs = readPrefs()
+  if (prefs.verificationRequired) {
+    setStatus(VERIFICATION_STATUS)
+    return
+  }
   if (!prefs.enabled || runController) return
   if (prefs.nextAt === 0) {
     void claimMissingSchedule()
@@ -298,6 +348,10 @@ export async function openOnePack(signal: AbortSignal): Promise<PackResponse> {
     } finally {
       clearTimeout(timeout)
       signal.removeEventListener('abort', abort)
+    }
+    if (json.human_verification_required === true) {
+      requirePackVerification()
+      throw new HumanVerificationError(VERIFICATION_STATUS)
     }
     if (json.rate_limited && !json.rate_limit_daily) {
       const retryAt = Date.parse(json.retry_after || '')
@@ -389,6 +443,11 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
         return
       }
       prefs = readPrefs()
+      if (prefs.verificationRequired) {
+        setStatus(VERIFICATION_STATUS)
+        updateOpenAllButton()
+        return
+      }
       if (mode === 'auto') {
         if (!prefs.enabled) return
         if (prefs.nextAt === 0 || prefs.nextAt > Date.now()) {
@@ -430,17 +489,22 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
           `${openedThisCycle} pack${openedThisCycle === 1 ? '' : 's'} opened`,
         )
       } catch (error) {
-        detail = runController.signal.aborted
-          ? runController.signal.reason instanceof Error
-            ? `${runController.signal.reason.message}.`
-            : 'Opening stopped.'
-          : error instanceof Error
-            ? `Failed: ${error.message}.`
-            : 'Failed: the game could not open the next pack.'
+        detail =
+          error instanceof HumanVerificationError
+            ? VERIFICATION_STATUS
+            : runController.signal.aborted
+              ? runController.signal.reason instanceof Error
+                ? `${runController.signal.reason.message}.`
+                : 'Opening stopped.'
+              : error instanceof Error
+                ? `Failed: ${error.message}.`
+                : 'Failed: the game could not open the next pack.'
         setStatus(detail)
       } finally {
         const shouldRefresh =
-          openedThisCycle > 0 && /^\/pulls(\/|$)/.test(location.pathname)
+          openedThisCycle > 0 &&
+          !readPrefs().verificationRequired &&
+          /^\/pulls(\/|$)/.test(location.pathname)
         const summaryAccountId = accountId ?? getAccountId()
         if (summaryAccountId)
           saveRunSummary({
@@ -457,7 +521,7 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
         runMode = null
         updateOpenAllButton()
         prefs = readPrefs()
-        if (prefs.enabled) {
+        if (prefs.enabled && !prefs.verificationRequired) {
           prefs.nextAt = Date.now() + randomDelay()
           writePrefs()
           scheduleAuto()
@@ -477,10 +541,11 @@ export function updateOpenAllButton(): void {
     .querySelector<HTMLElement>('[data-wm-toolbox-panel]')
     ?.shadowRoot?.querySelector<HTMLButtonElement>('[data-wm-toolbox-open-all]')
   if (!button) return
-  button.disabled = runMode === 'auto'
+  button.disabled = runMode === 'auto' || prefs.verificationRequired
   button.classList.toggle('wm-open-all-confirm', confirmationTimer !== null)
-  button.textContent =
-    runMode === 'manual'
+  button.textContent = prefs.verificationRequired
+    ? 'Verify with the game’s Open button'
+    : runMode === 'manual'
       ? `Stop opening (${openedThisCycle})`
       : runMode === 'auto'
         ? 'Opening automatically…'

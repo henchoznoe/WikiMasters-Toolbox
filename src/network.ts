@@ -18,7 +18,7 @@ function accountIdFromProfileUrl(url: URL): string | null {
   if (
     !url.hostname.endsWith('.supabase.co') ||
     url.pathname !== '/rest/v1/profiles' ||
-    url.searchParams.get('select') !== 'id,is_pro'
+    url.searchParams.get('select')?.replace(/\s/g, '') !== 'id,is_pro'
   )
     return null
   return (
@@ -62,7 +62,12 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
   }
   const profileId = accountIdFromProfileUrl(url)
   if (profileId) {
-    if (Array.isArray(json) && json.some(row => row?.id === profileId))
+    const profiles = Array.isArray(json) ? json : [json]
+    if (
+      profiles.some(
+        row => row && typeof row === 'object' && row.id === profileId,
+      )
+    )
       setAccount(profileId)
     return
   }
@@ -172,6 +177,18 @@ function isRelevant(url: URL, method: string): boolean {
   )
 }
 
+function inspectPackVerification(url: URL, json: unknown, epoch: number): void {
+  if (
+    epoch === accountEpoch &&
+    url.origin === location.origin &&
+    url.pathname === '/api/packs/open' &&
+    json &&
+    typeof json === 'object' &&
+    (json as Record<string, unknown>).human_verification_required === true
+  )
+    emit({ kind: 'pack-verification-required', accountId })
+}
+
 if (!networkWindow.__wmToolboxNetworkInstalled) {
   networkWindow.__wmToolboxNetworkInstalled = true
   const originalFetch = window.fetch.bind(window)
@@ -205,6 +222,20 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
               .json()
               .catch(() => null)
             inspect(url, method, json, epoch)
+          } else if (
+            url.origin === location.origin &&
+            url.pathname === '/api/packs/open'
+          ) {
+            inspectPackVerification(
+              url,
+              await response
+                .clone()
+                .json()
+                .catch(() => null),
+              epoch,
+            )
+            if (response.status >= 500 && epoch === accountEpoch)
+              emit({ kind: 'collection-changed', accountId })
           } else if (
             response.status >= 500 &&
             isMutation(url, method) &&
@@ -266,7 +297,20 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
           ) {
             emit({ kind: 'collection-changed', accountId })
           }
-          if (this.status < 200 || this.status >= 300) return
+          if (this.status < 200 || this.status >= 300) {
+            try {
+              inspectPackVerification(
+                request.url,
+                this.responseType === 'json'
+                  ? this.response
+                  : JSON.parse(this.responseText || 'null'),
+                request.epoch,
+              )
+            } catch {
+              /* Non-JSON response. */
+            }
+            return
+          }
           try {
             inspect(
               request.url,

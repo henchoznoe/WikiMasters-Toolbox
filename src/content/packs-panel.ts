@@ -7,6 +7,7 @@ import {
   setManualLimit,
   setMaxMinutes,
   setMinMinutes,
+  syncPrefsFromStorage,
   updateOpenAllButton,
 } from './packs'
 import { renderRunSummary, setRunSummaryExpanded } from './run-summary'
@@ -118,6 +119,7 @@ export function createPacksBody(): HTMLElement {
   status.setAttribute('role', 'status')
   status.className = 'wm-status'
   status.textContent = getStatus()
+  status.hidden = getStatus() === 'Disabled'
   const note = document.createElement('p')
   note.className = 'wm-note'
   note.textContent = 'Keep this tab open for scheduled opening.'
@@ -125,7 +127,7 @@ export function createPacksBody(): HTMLElement {
   autoDetails.className = 'wm-auto-details'
   autoDetails.dataset.wmToolboxAutoDetails = '1'
   autoDetails.hidden = !prefs.enabled
-  autoDetails.append(fields, status, note)
+  autoDetails.append(fields, note)
   const stats = document.createElement('section')
   stats.dataset.wmToolboxStats = '1'
   stats.className = 'wm-stats'
@@ -136,12 +138,15 @@ export function createPacksBody(): HTMLElement {
     runSummary,
     toggleLabel,
     autoDetails,
+    status,
     stats,
   )
   return body
 }
 
 export function mountPacksBody(): void {
+  // Restore the verification notice even when automatic opening is disabled.
+  if (getPrefs().verificationRequired) syncPrefsFromStorage()
   updateOpenAllButton()
   renderRunSummary()
   renderStats()
