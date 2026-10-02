@@ -4,8 +4,11 @@ import {
   parsePageCards,
   resolvePageAdapter,
 } from './page-adapters'
+import { currentPriceContext } from './price-context'
 import { presentPrice } from './price-presentation'
 import { requestJson } from './requests'
+import { saleSample } from './sales-model'
+import { observeSaleSamples } from './sales-store'
 
 export { formatPriceAge, presentPrice } from './price-presentation'
 
@@ -111,7 +114,7 @@ export function resolveVisibleCard(
 }
 
 function updatePriceBadge(badge: HTMLElement, quote: PriceQuote): void {
-  const presentation = presentPrice(quote)
+  const presentation = presentPrice(quote, currentPriceContext())
   badge.dataset.status = presentation.status
   const value = badge.querySelector<HTMLElement>('.wm-price-value')
   const age = badge.querySelector<HTMLElement>('.wm-price-age')
@@ -139,6 +142,7 @@ function createPriceBadge(large = false): HTMLElement {
         badge.dataset.cardId,
         badge.dataset.rarity,
         badge.dataset.cardTitle ?? '',
+        badge.dataset.shiny === 'true',
       )
   })
   badge.className = `wm-price-badge${large ? ' wm-price-badge-large' : ''}`
@@ -193,6 +197,7 @@ function renderBadge(card: HTMLElement, identity: Card): void {
   badge.dataset.cardId = id
   badge.dataset.rarity = rarity ?? ''
   badge.dataset.cardTitle = identity.title
+  badge.dataset.shiny = String(identity.shiny)
   updatePriceBadge(badge, quote)
   if (needsPrice(id)) {
     visiblePriceObserver.observe(card)
@@ -292,6 +297,7 @@ function renderInlinePrice(anchor: HTMLElement, identity: Card): void {
   badge.dataset.cardId = identity.id
   badge.dataset.rarity = identity.rarity ?? ''
   badge.dataset.cardTitle = identity.title
+  badge.dataset.shiny = String(identity.shiny)
   updatePriceBadge(badge, readPriceQuote(identity.id, identity.rarity))
   if (needsPrice(identity.id)) visiblePriceObserver.observe(anchor)
 }
@@ -334,6 +340,7 @@ export function renderMarketplace(): void {
   badge.dataset.cardId = id
   badge.dataset.rarity = rarity ?? ''
   badge.dataset.cardTitle = identity.title
+  badge.dataset.shiny = String(identity.shiny)
   updatePriceBadge(badge, quote)
   if (needsPrice(id)) void requestPriceQuote(id)
 }
@@ -390,6 +397,19 @@ export async function hydrateRoute(): Promise<void> {
       getAccountId() !== expectedAccount
     )
       return
+    if (adapter.id === 'market') {
+      const rows = Array.isArray(json.auctions)
+        ? json.auctions
+        : json.auction
+          ? [json.auction]
+          : []
+      observeSaleSamples(
+        rows.slice(0, 1000).flatMap(row => {
+          const sample = saleSample(row)
+          return sample ? [sample] : []
+        }),
+      )
+    }
     const cards = parsePageCards(adapter, json)
     if (!cards) {
       setCompatibilityIssue(

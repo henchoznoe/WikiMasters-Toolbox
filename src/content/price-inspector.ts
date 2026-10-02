@@ -1,3 +1,4 @@
+import { currentPriceContext, priceTooOld } from './price-context'
 import { type Observation, RARITIES } from './price-model'
 import { presentPrice } from './price-presentation'
 import {
@@ -7,9 +8,16 @@ import {
   requestPriceQuote,
 } from './price-store'
 import { createRarityBadge } from './rarity'
+import { estimateSales } from './sales-model'
+import { readSaleSamples } from './sales-store'
 import { createToolboxRoot } from './shared'
 
-let selected: { id: string; rarity: string; title: string } | null = null
+let selected: {
+  id: string
+  rarity: string
+  title: string
+  shiny: boolean
+} | null = null
 let opener: HTMLElement | null = null
 export function closePriceInspector(): void {
   document.querySelector('[data-wm-price-inspector]')?.remove()
@@ -21,13 +29,19 @@ export function openPriceInspector(
   id: string,
   rarity: string,
   title: string,
+  shiny = false,
 ): void {
   let nextOpener = document.activeElement as HTMLElement | null
   while (nextOpener?.shadowRoot?.activeElement)
     nextOpener = nextOpener.shadowRoot.activeElement as HTMLElement
   closePriceInspector()
   opener = nextOpener
-  selected = { id, rarity, title }
+  selected = {
+    id,
+    rarity,
+    title,
+    shiny,
+  }
   const host = document.createElement('div')
   host.dataset.wmPriceInspector = '1'
   const root = createToolboxRoot(host)
@@ -57,6 +71,8 @@ export function openPriceInspector(
   value.dataset.priceInspectorValue = '1'
   const history = document.createElement('div')
   history.dataset.priceHistory = '1'
+  const sample = document.createElement('div')
+  sample.dataset.priceSalesSample = '1'
   const actions = document.createElement('div')
   actions.className = 'wm-collection-actions'
   actions.append(
@@ -69,12 +85,19 @@ export function openPriceInspector(
   method.className = 'wm-price-method'
   const summary = document.createElement('summary')
   summary.textContent = 'Method'
-  const explanation = document.createElement('p')
-  explanation.className = 'wm-note'
-  explanation.textContent =
-    'Average: WikiMasters summary for this rarity, source window and volume unknown. Age: when checked, not when sold. Shiny premium is not exposed. Local graph: one observation per UTC day, last 90 days; missing days are gaps.'
-  method.append(summary, explanation)
-  dialog.append(header, rarities, value, actions, history, method)
+  method.append(summary)
+  for (const text of [
+    'Average: WikiMasters summary for this rarity, source window and volume unknown. Age: when checked, not when sold. Shiny premium is not exposed. Album freshness: 24 h; sale/trade: 15 min. Refresh preserves the original age on failure. Local graph: one average observation per UTC day, last 90 days; missing days are gaps.',
+    'Sales sample: explicit settled_sold results with final amount, auction end time, snapshot rarity and shiny status, from free native history or visited auctions. One result per auction, same catalogue ID, rarity and shiny status. Last 30 days by auction end time; up to 1,000 results per account.',
+    'Median: at least 5 sales on 3 distinct UTC end days. Indicative Q1–Q3 range: at least 10 sales on 3 days, linear interpolation, middle half of observed prices. Extremes: outside Q1 − 1.5×IQR / Q3 + 1.5×IQR; they remain in the median.',
+    'These are minimum display thresholds, not proof of market coverage. The observed volume is incomplete. Selection can be biased: the range is not a confidence interval or a prediction.',
+  ]) {
+    const explanation = document.createElement('p')
+    explanation.className = 'wm-note'
+    explanation.textContent = text
+    method.append(explanation)
+  }
+  dialog.append(header, rarities, value, actions, sample, history, method)
   root.append(dialog)
   document.body.append(host)
   dialog.addEventListener('keydown', event => {
@@ -157,10 +180,18 @@ export function renderPriceInspector(): void {
   if (!selected) return
   const root = document.querySelector('[data-wm-price-inspector]')?.shadowRoot
   if (!root) return
-  const { id, rarity } = selected
+  const { id, rarity, shiny } = selected
+  const context = currentPriceContext()
+  const quote = readPriceQuote(id, rarity)
   const refresh = root.querySelector<HTMLButtonElement>('[data-price-refresh]')
-  if (refresh) refresh.disabled = !canRefreshPrice(id)
-  const presentation = presentPrice(readPriceQuote(id, rarity))
+  if (refresh) {
+    refresh.disabled = !canRefreshPrice(id)
+    refresh.textContent =
+      context === 'decision' && priceTooOld(quote, context)
+        ? '↻ Refresh before decision'
+        : '↻'
+  }
+  const presentation = presentPrice(quote, context)
   const value = root.querySelector<HTMLElement>('[data-price-inspector-value]')
   if (value) {
     value.textContent = `${presentation.value}${presentation.age ? ` · ${presentation.age}` : ''}`
@@ -173,6 +204,36 @@ export function renderPriceInspector(): void {
       'aria-pressed',
       String(button.dataset.priceRarity === rarity),
     )
+  const sample = root.querySelector<HTMLElement>('[data-price-sales-sample]')
+  if (sample) {
+    const estimate = estimateSales(readSaleSamples(), { id, rarity, shiny })
+    const money = (value: number) =>
+      new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)
+    const lines = [
+      `Observed concluded sales · ${rarity} · ${shiny ? 'shiny' : 'normal'} · ${estimate.count} / 30 days · ${estimate.days} UTC days`,
+      estimate.median === null
+        ? 'Median — · needs 5 sales on 3 distinct days'
+        : `Local median ${money(estimate.median)} W · ${estimate.extremes} extreme values retained`,
+      estimate.range
+        ? `Indicative Q1–Q3: ${money(estimate.range[0])}–${money(estimate.range[1])} W · incomplete sample`
+        : 'Range — · needs 10 sales on 3 distinct days',
+      estimate.oldest && estimate.newest
+        ? `Auction ends: ${new Date(estimate.oldest).toLocaleDateString()} – ${new Date(estimate.newest).toLocaleDateString()} · latest ${new Date(estimate.newest).toLocaleString()}`
+        : 'Observe free market history / concluded listings to build a sample',
+    ]
+    const signature = JSON.stringify(lines)
+    if (sample.dataset.signature !== signature) {
+      sample.dataset.signature = signature
+      sample.replaceChildren(
+        ...lines.map(text => {
+          const p = document.createElement('p')
+          p.className = 'wm-note'
+          p.textContent = text
+          return p
+        }),
+      )
+    }
+  }
   const history = root.querySelector<HTMLElement>('[data-price-history]')
   const points = readPriceHistory(id, rarity)
   const fingerprint = JSON.stringify(points)

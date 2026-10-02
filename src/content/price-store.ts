@@ -1,4 +1,5 @@
 import { cachePolicies, onCacheChange, writeCache } from './cache'
+import { DECISION_TTL, type PriceContext } from './price-context'
 import {
   appendObservation,
   type Observation,
@@ -111,6 +112,19 @@ export function canRefreshPrice(id: string): boolean {
 export function needsPrice(id: string): boolean {
   const row = readEntry(id)
   return !row || !fresh(row)
+}
+export function needsPriceForContext(
+  id: string,
+  context: PriceContext,
+): boolean {
+  const row = readEntry(id)
+  return (
+    needsPrice(id) ||
+    (context === 'decision' &&
+      !!row?.ok &&
+      Date.now() - row.fetchedAt >= DECISION_TTL &&
+      canRefreshPrice(id))
+  )
 }
 export function readPriceQuote(id: string, rarity: string | null): PriceQuote {
   const row = readEntry(id)
@@ -280,12 +294,15 @@ export async function startPriceBatch(
   ids: string[],
   force = false,
   cap = 50,
+  context: PriceContext = 'album',
 ): Promise<void> {
   if (batch.running) return
   const token = ++generation
   const unique = [...new Set(ids)]
   const selected = unique
-    .filter(id => (force ? canRefreshPrice(id) : needsPrice(id)))
+    .filter(id =>
+      force ? canRefreshPrice(id) : needsPriceForContext(id, context),
+    )
     .slice(0, Math.max(1, Math.min(100, Math.floor(cap) || 50)))
   batch = {
     running: true,
@@ -300,7 +317,7 @@ export async function startPriceBatch(
     if (generation !== token) return
     if (priceRequestLimit()) break
     const before = readEntry(id)?.lastAttempt ?? readEntry(id)?.fetchedAt
-    await requestPriceQuote(id, force)
+    await requestPriceQuote(id, force || context === 'decision')
     if (generation !== token) return
     const row = readEntry(id)
     if ((row?.lastAttempt ?? row?.fetchedAt) === before) batch.skipped += 1

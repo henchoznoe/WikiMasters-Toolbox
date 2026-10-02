@@ -32,6 +32,16 @@ export const cachePolicies = {
     account: false,
     time: 'history',
   },
+  sales: {
+    prefix: 'wm_toolbox_sales_sample_v1:',
+    label: 'Concluded sales · account',
+    freshness: DAY,
+    retention: 30 * DAY,
+    maxEntries: 10,
+    maxBytes: 2 * 1024 * 1024,
+    account: true,
+    time: 'observedAt',
+  },
 } as const
 export type CacheKind = keyof typeof cachePolicies
 const listeners = new Set<(kind: CacheKind) => void>()

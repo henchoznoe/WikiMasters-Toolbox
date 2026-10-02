@@ -502,6 +502,8 @@ export function renderSaleSupport(): void {
         void requestPriceQuote(getSaleState().card?.id ?? '', true)
     })
     refresh.dataset.wmSaleRefresh = '1'
+    refresh.title =
+      'Refresh this card before deciding · sale prices should be checked within 15 min'
     const draft = draftControls(null)
     draft.body.hidden = true
     const apply = button('Apply proposal', () => {
@@ -566,10 +568,13 @@ export function renderSaleSupport(): void {
   }
   const root = saleHost.shadowRoot
   if (!root) return
-  const quote = presentPrice(readPriceQuote(state.card.id, state.card.rarity))
+  const quote = presentPrice(
+    readPriceQuote(state.card.id, state.card.rarity),
+    'decision',
+  )
   const summary = root.querySelector<HTMLElement>('[data-wm-sale-quote]')
   if (summary) {
-    summary.textContent = `Average ${quote.value} · ${quote.age || '—'}`
+    summary.textContent = `Average ${quote.value} · ${quote.age || '—'} · 15 min freshness`
     summary.title = quote.hint
   }
   const difference = root.querySelector<HTMLElement>(
