@@ -1,8 +1,4 @@
-import {
-  currentPriceContext,
-  type PriceContext,
-  priceTooOld,
-} from './price-context'
+import { currentPriceContext, priceTooOld } from './price-context'
 import { type Observation, RARITIES } from './price-model'
 import { presentPrice } from './price-presentation'
 import {
@@ -21,7 +17,6 @@ let selected: {
   rarity: string
   title: string
   shiny: boolean
-  context: PriceContext
 } | null = null
 let opener: HTMLElement | null = null
 export function closePriceInspector(): void {
@@ -46,7 +41,6 @@ export function openPriceInspector(
     rarity,
     title,
     shiny,
-    context: currentPriceContext(),
   }
   const host = document.createElement('div')
   host.dataset.wmPriceInspector = '1'
@@ -186,7 +180,8 @@ export function renderPriceInspector(): void {
   if (!selected) return
   const root = document.querySelector('[data-wm-price-inspector]')?.shadowRoot
   if (!root) return
-  const { id, rarity, shiny, context } = selected
+  const { id, rarity, shiny } = selected
+  const context = currentPriceContext()
   const quote = readPriceQuote(id, rarity)
   const refresh = root.querySelector<HTMLButtonElement>('[data-price-refresh]')
   if (refresh) {

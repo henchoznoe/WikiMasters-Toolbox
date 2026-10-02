@@ -410,3 +410,94 @@ test('a native sale form uses decision freshness even on the collection route', 
   saleForm = true
   assert.equal(c.currentPriceContext(), 'decision')
 })
+
+test('an open inspector follows entry into and exit from a native sale context', async () => {
+  class Node {
+    children = []
+    dataset = {}
+    attributes = new Map()
+    append(...children) {
+      this.children.push(...children)
+    }
+    replaceChildren(...children) {
+      this.children = children
+    }
+    get firstElementChild() {
+      return this.children[0] ?? null
+    }
+    setAttribute(name, value) {
+      this.attributes.set(name, value)
+    }
+    addEventListener() {}
+    focus() {}
+    remove() {}
+    attachShadow() {
+      this.shadowRoot = new Node()
+      return this.shadowRoot
+    }
+    querySelectorAll(selector) {
+      const key = selector
+        .match(/^\[data-([^\]]+)\]$/)?.[1]
+        ?.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())
+      return this.children.flatMap(child => [
+        ...(key &&
+        (key in child.dataset || child.attributes.has(selector.slice(1, -1)))
+          ? [child]
+          : []),
+        ...child.querySelectorAll(selector),
+      ])
+    }
+    querySelector(selector) {
+      return this.querySelectorAll(selector)[0] ?? null
+    }
+  }
+  const body = new Node()
+  let saleForm = false
+  const document = {
+    body,
+    activeElement: null,
+    createElement: () => new Node(),
+    querySelector: selector =>
+      selector.startsWith('input[')
+        ? saleForm
+          ? {}
+          : null
+        : body.querySelector(selector),
+  }
+  const localStorage = memory()
+  localStorage.setItem(
+    'wm_toolbox_price_v1_old',
+    JSON.stringify({
+      fetchedAt: NOW - 20 * 60_000,
+      ok: true,
+      averages: { R: 12 },
+    }),
+  )
+  const c = await expose(
+    'price-inspector',
+    'openPriceInspector,renderPriceInspector',
+    {
+      document,
+      localStorage,
+      Date: Clock,
+      location: { pathname: '/collection' },
+      CSSStyleSheet: class {
+        replaceSync() {}
+      },
+    },
+  )
+  c.openPriceInspector('old', 'R', 'Synthetic card')
+  const root = body.querySelector('[data-wm-price-inspector]').shadowRoot
+  const value = root.querySelector('[data-price-inspector-value]')
+  const refresh = root.querySelector('[data-price-refresh]')
+  assert.equal(value.textContent, '12 W · 20 min')
+  saleForm = true
+  c.renderPriceInspector()
+  assert.equal(value.textContent, '12 W ↻ · 20 min')
+  assert.match(value.title, /refresh before deciding/)
+  assert.equal(refresh.textContent, '↻ Refresh before decision')
+  saleForm = false
+  c.renderPriceInspector()
+  assert.equal(value.textContent, '12 W · 20 min')
+  assert.equal(refresh.textContent, '↻')
+})
