@@ -30,6 +30,7 @@ import {
   inspectCopy,
   nativeMarket,
   readSaleJournal,
+  requireSaleCheck,
   stopSaleCheck,
 } from './sale'
 import { createToolboxRoot } from './shared'
@@ -485,6 +486,7 @@ export function renderSaleSupport(): void {
     const acknowledge = document.createElement('input')
     acknowledge.type = 'checkbox'
     acknowledge.dataset.wmSaleAcknowledge = '1'
+    acknowledge.addEventListener('change', requireSaleCheck)
     const label = document.createElement('label')
     label.className = 'wm-note'
     label.append(

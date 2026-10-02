@@ -11,11 +11,17 @@ import { getSelectionState, parseCommitments } from './collection-actions'
 import { saleBlock } from './market-model'
 import { chooseComparables } from './market-store'
 import { requestMarketJson } from './price-store'
+import { buildSelection } from './selection'
 import { isCard } from './shared'
 
 export const SALE_JOURNAL_PREFIX = 'wm_toolbox_sale_v1:'
 let card: Card | null = null
 let checkedUntil = 0
+let approvedProtections = ''
+function protectionKey(): string {
+  const rules = getSelectionState().rules
+  return JSON.stringify([rules.protect, rules.keep])
+}
 let busy = false
 let submitted = false
 let attempt: { owner: string; copyId: string } | null = null
@@ -75,6 +81,7 @@ export function cancelSale(): void {
   request?.abort()
   request = null
   checkedUntil = 0
+  approvedProtections = ''
   busy = false
   if (!submitted || attempt?.owner !== getAccountId()) {
     release?.()
@@ -170,12 +177,21 @@ export async function checkSale(acknowledge: boolean): Promise<void> {
         if (blocked) throw new Error(blocked)
         if (!copy || cardVariantKey(copy) !== cardVariantKey(expected))
           throw new Error('Copy changed')
-        const protectedReason = getSelectionState().plan.blocked.get(
-          copy.copyId,
-        )
+        const rules = getSelectionState().rules
+        const protectedReason = buildSelection(
+          getCollectionState().cards,
+          {
+            ...rules,
+            rarities: new Set(),
+            added: new Set([copy.copyId]),
+            removed: new Set(),
+          },
+          commitments,
+        ).blocked.get(copy.copyId)
         if (protectedReason && !acknowledge)
           throw new Error(`${protectedReason} · acknowledge protection to sell`)
         checkedUntil = Date.now() + 30_000
+        approvedProtections = protectionKey()
         nativeMarket('approve', { copyId: copy.copyId })
         busy = false
         notify()
@@ -219,6 +235,7 @@ window.addEventListener('wm-toolbox:sale-submit', event => {
       !Number.isSafeInteger(data.amount) ||
       data.amount < 1 ||
       checkedUntil <= Date.now() ||
+      approvedProtections !== protectionKey() ||
       submitted ||
       !release ||
       !getOwnedCopy(card.copyId as string)
