@@ -1,91 +1,122 @@
+<div align="center">
+
+<img src="icons/icon-128.png" alt="WikiMasters Toolbox" width="96" height="96">
+
 # WikiMasters Toolbox
 
-A Chrome extension for [WikiMasters](https://www.wiki-masters.com/) focused on collection tools, card prices and packs:
+A companion extension for everyday play on WikiMasters.
 
-- Average sale prices in collection/catalogue cards, market listings/details, trades and packs, with targeted refresh and local observations.
-- A full local collection index with identified copies, loading progress, stop/resume and synchronization after game actions.
-- Selection by rarity across the full collection, protected copies, keep-N rules, a discard preview and controlled execution.
-- Optional automatic opening of available packs at a configurable interval.
-- A manual action to open all available packs or a chosen number, plus local statistics by card rarity.
+[![CI](https://github.com/henchoznoe/WikiMasters-Toolbox/actions/workflows/ci.yml/badge.svg)](https://github.com/henchoznoe/WikiMasters-Toolbox/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/henchoznoe/WikiMasters-Toolbox)](https://github.com/henchoznoe/WikiMasters-Toolbox/releases/latest)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Install-4285F4?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/wikimasters-toolbox/nekkambfdbbmledkjpeagiafncciaalf)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-The extension is independent of WikiMasters. It uses only the game's own API and stores the price cache, automation preferences, and pack statistics in the browser. Automatic opening is **off by default** and consumes available packs when enabled.
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Biome](https://img.shields.io/badge/Biome-39B420?logo=biome&logoColor=white)](https://biomejs.dev/)
 
-## Development
+[Install extension](https://chromewebstore.google.com/detail/wikimasters-toolbox/nekkambfdbbmledkjpeagiafncciaalf) · [Roadmap](ROADMAP.md) · [Report an issue](https://github.com/henchoznoe/WikiMasters-Toolbox/issues)
 
-Requirements: Node.js 24 and pnpm 12.4.2.
+</div>
+
+## Overview
+
+WikiMasters Toolbox brings useful context and controls directly into [WikiMasters](https://www.wiki-masters.com/), making it easier to manage a growing collection and understand card values while playing. Its compact interface follows the game's visual style and keeps the information close to the cards.
+
+Every option is designed for a **free WikiMasters account**. Toolbox uses the game's available data and keeps its settings, caches and statistics in your browser. It is an independent community project, with no developer-operated backend, analytics or advertising. See the [privacy policy](PRIVACY.md) for the stored data and the [roadmap](ROADMAP.md) for planned work.
+
+## Installation
+
+Install [WikiMasters Toolbox from the Chrome Web Store](https://chromewebstore.google.com/detail/wikimasters-toolbox/nekkambfdbbmledkjpeagiafncciaalf), then open or reload WikiMasters while signed in. The Toolbox appears directly on supported game pages. Chrome manages updates for the Store installation.
+
+## Local development
+
+Use **Node.js 24** and **pnpm 12.4.2**, matching GitHub Actions and `package.json`.
 
 ```sh
+git clone https://github.com/henchoznoe/WikiMasters-Toolbox.git
+cd WikiMasters-Toolbox
 pnpm install --frozen-lockfile
+pnpm build
+```
+
+Open `chrome://extensions/`, enable **Developer mode**, choose **Load unpacked**, and select the generated `dist/` directory. After editing the source, rebuild, reload the extension, then reload the WikiMasters tab.
+
+The extension runs against the live game. For browser testing, use a dedicated account and check which actions consume packs or change cards before executing them.
+
+### Commands
+
+| Command | Purpose |
+| --- | --- |
+| `pnpm build` | Check TypeScript and bundle the extension into `dist/` |
+| `pnpm lint` | Check formatting and lint rules with Biome |
+| `pnpm format` | Apply Biome formatting and fixes |
+| `pnpm test` | Run the tests against the current build; run `pnpm build` first |
+| `pnpm check` | Run lint, build and tests |
+| `pnpm package` | Run all checks and create the Chrome ZIP in `artifacts/` |
+
+### Project structure
+
+```text
+src/
+├── content.ts          # Startup, navigation and page events
+├── network.ts          # Bridge for relevant native game responses
+├── cards.ts            # Card and possession identity mapping
+├── content/            # Collection, prices, packs and shared Toolbox UI
+└── toolbox.css         # Styles scoped to the extension's shadow roots
+tests/                  # Node tests and mocked game responses
+scripts/                # Build, packaging and Store publication
+.github/workflows/      # CI, releases and Chrome Web Store delivery
+manifest.json           # Chrome Manifest V3
+ROADMAP.md              # Prioritized backlog
+AGENTS.md               # Repository guidance; CLAUDE.md links to this file
+```
+
+## Contributing
+
+Issues and pull requests are welcome. Check the [roadmap](ROADMAP.md) before starting; open an issue to discuss larger changes or suggest an idea. Bug reports should include the game page, reproduction steps, expected behavior and extension version. Remove account details and session data from logs or screenshots.
+
+Create a branch from `develop`, keep the change focused, and open your PR against **`develop`**. Follow [Conventional Commits](https://www.conventionalcommits.org/) for commits and PR titles (`feat:`, `fix:`, `docs:`, etc.). Read [AGENTS.md](AGENTS.md) for the architecture and implementation conventions; [CLAUDE.md](CLAUDE.md) is a symlink to the same guidance.
+
+Before submitting:
+
+```sh
 pnpm check
 pnpm package
 ```
 
-Load the `dist/` directory in `chrome://extensions/` after enabling Developer mode. Reload the extension and the WikiMasters tab after each build. The ZIP in `artifacts/` is intended for the Chrome Web Store.
+Describe what changed and how it was verified. Add regression coverage for behavior changes, and check affected UI in Chrome when possible. Keep new functionality usable with a free game account and reuse the shared Toolbox components.
 
-The source lives in `src/`. TypeScript checks every module, then esbuild bundles two browser scripts into `dist/network.js` and `dist/content.js`. The small stylesheet in `src/toolbox.css` is embedded in `content.js` and applied only inside the extension's shadow roots, leaving the game's styles untouched. The packaged extension contains the two scripts, icons, and `manifest.json`.
+## Releases and automatic deployment
 
-`src/content.ts` handles startup and page events. The `src/content/` modules separate the collection index, prices, pack opening, statistics, and the panel UI. `src/cards.ts` maps game data to catalogue IDs, snapshot rarities, shiny variants and possession IDs; catalogue IDs identify price requests, while possession IDs identify owned copies. `src/content/routes.ts` lists the pages that have a Toolbox panel. Each page supplies its label, route match, content, and optional mount or cleanup hooks; `src/content/panel.ts` supplies the shared **Toolbox** header and show/hide behavior. Add future page panels through this registry rather than placing their controls in the entry script. Panels are available on `/collection`, `/pulls`, `/global-collection`, `/marketplace` and `/trades`.
+The delivery path is **feature branch → `develop` → `main` → GitHub Release → Chrome Web Store**.
 
-## Usage
+1. [CI](.github/workflows/ci.yml) checks pull requests and pushes to `develop` and `main`, then builds a downloadable Chrome ZIP.
+2. A merge to `main` runs the [release workflow](.github/workflows/release.yml). [semantic-release](release.config.mjs) determines whether a release is needed and calculates its version from Conventional Commits and existing tags.
+3. For a new release, the workflow applies the version in its workspace, creates the Git tag, and attaches the versioned ZIP to a GitHub Release. It does not push a version commit back to `main`.
+4. With `CWS_ENABLED=true`, that release dispatches [Publish Chrome extension](.github/workflows/publish-chrome.yml). It checks out the release tag, applies its version, rebuilds and verifies the package, then uploads it and submits it to the Chrome Web Store. Google controls review and final availability.
 
-On `/collection`, **Load collection** builds a local index of the current account's full, unfiltered collection, using the game's pages of 50 copies. It shows the loaded count and marks an incomplete index as partial. **Stop** keeps valid pages; **Resume** continues after checking the total and first page. The small refresh button restarts an interrupted load. Progress survives a reload when local storage is available. A saved partial traversal expires after 15 minutes, and a completed index becomes stale after five minutes. Busy servers and temporary network errors receive at most three attempts per request. A failed request never counts as an empty page.
+Merging a PR into `develop` validates the change; Store delivery starts from a new release on `main`. The tracked version in `package.json` and `manifest.json` is development metadata. Use the versioned GitHub Release ZIP for a manual Store upload.
 
-After the first load, observed pack openings, marketplace/trade mutations, discards, favorites and tags invalidate the index and schedule a fresh traversal. Returning to the collection, changed native collection totals and newly observed copies also trigger synchronization. Returning to a visible tab refreshes an index older than five minutes, to avoid repeated traversals while switching windows. Account changes cancel the previous traversal and restore only that account's index. Loading or refreshing the index performs no action on cards.
+### Maintainer setup
 
-The index keeps each possession separately, including copies of the same catalogue card with different snapshot rarities or shiny variants. Grouped rows without distinct possession IDs are rejected. The game does not expose an atomic pagination snapshot: Toolbox checks copy IDs, page lengths, the final total and the first page before marking the index complete, but remote changes are detected on subsequent observations rather than in real time. Collection actions use possession IDs and revalidate the full index and sale/trade protections after confirmation. Price badges use the visible rarity and skip ambiguous title matches when the DOM exposes no stable ID; a title match never identifies a possession for an action.
+Configure the publishing account and OAuth access using the [Chrome Web Store API guide](https://developer.chrome.com/docs/webstore/using-api). Publication uses the GitHub environment **`chrome-web-store`** and these repository or environment secrets:
 
-Open **Select / discard** to refresh the entire collection and load sale/trade protections. Choose one or more colored rarity tiles. **Keep / protect** excludes favorites, tagged cards, cards in active sales or pending trades, unique variants and shiny cards by default. **Keep per variant** retains at least N copies of each catalogue ID + rarity + shiny variant; protected or individually excluded copies count toward that minimum. A unique card can be selected only when its protection is disabled and N is 0. **Adjust copies** searches every indexed copy, with pages of 30 and a selected-only view. Each checkbox identifies a possession; title matches never feed a discard. All rarity controls use the shared `/pulls` color palette and textured backgrounds. Use `createRarityBadge` and `.wm-rarity-surface` for future rarity UI.
+| Secret | Purpose |
+| --- | --- |
+| `CWS_CLIENT_ID` | Google OAuth client ID |
+| `CWS_CLIENT_SECRET` | Google OAuth client secret |
+| `CWS_REFRESH_TOKEN` | Refresh token for the publishing account |
+| `CWS_PUBLISHER_ID` | Chrome Web Store publisher ID |
+| `CWS_EXTENSION_ID` | Existing Store item ID |
 
-**Preview** shows the selected counts by rarity and each affected variant's before/after quantities. **Discard N** is the final confirmation of permanent removal. Toolbox then rechecks the complete collection and commitments; a changed snapshot cancels execution and requires another preview. It uses the game's native `POST /api/user-cards/bulk-discard` with one identified copy per request so each result remains attributable, sequentially with at least 350 ms between requests. This avoids relying on an undocumented larger batch limit. Browser locks prevent simultaneous Toolbox discard runs for the same account across tabs. **Stop** finishes the current write, then stops subsequent requests. Writes are never retried automatically; network failures, 429/5xx responses, timeouts or unexpected results stop the run and mark that copy uncertain. Definitive per-copy rejections remain visible in the result list. Changing account, leaving the collection or observing another collection change stops subsequent writes.
+Set the repository variable **`CWS_ENABLED=true`** once the Store item and credentials are ready. Keep credentials out of Git. With the secrets provided as local environment variables, this command verifies access without uploading or submitting a package:
 
-The last discard journal is stored locally per account before every write and after its response. If the journal cannot be saved, execution stops before the next write. After an interrupted reload, a pending request is shown as uncertain; execution never resumes automatically. The result lists successful, failed, uncertain and unattempted copies. After an attempted action the index is invalidated and the collection page reloads to update the game's card grid and balance; the journal survives this reload. Protection checks are snapshots, not server reservations: another device can change a card between the check and a write, and the game remains authoritative. The extension never bypasses a server rejection or privilege requirement.
+```sh
+node scripts/publish-chrome.mjs --verify
+```
 
-Average prices appear on collection, global catalogue, inspected cards, pack grids/recaps, marketplace listings/details and supported trade cards/pills. A compact price is centered below the card stats in every supported grid. `…` means loading, `—` means no sales for that rarity or no market card (see tooltip), and `!` means a failed or paused request. Unknown rarity never borrows another rarity’s price. Prices and age share one presentation everywhere. Click a price to inspect its rarity, refresh that catalogue card, view local observations or request a sales analysis. The same colored, textured rarity controls are used throughout.
-
-Open **Prices** in the Toolbox on `/collection`, `/global-collection`, `/pulls`, `/marketplace` or `/trades`. Choose cards on the current page, the currently loaded collection index, or the collection selection. The collection scope can be partial; its status is shown in the progress tooltip. Choose rarities, leave **Refresh cached prices** unchecked to load only missing/expired prices, and set a request cap (1–100, default 50). One summary request covers every rarity of a catalogue ID; copies are deduplicated. Progress counts processed catalogue IDs, with skipped/error counts. **Stop** finishes the pending read and prevents the next batch request. Visible-card reads are independent. A page/account change stops the batch.
-
-Summary requests are serialized with at least 650 ms between starts, a 12-second timeout, and a 200-request/hour budget per tab, shared with on-demand detailed sales. The budget survives navigation/reload when session storage is available; otherwise it applies to the page lifetime. `429` pauses for 1–5 minutes (respecting a numeric Retry-After); `5xx` pauses for 30 seconds. There are no immediate automatic retries. Cached summaries last 24 hours; targeted forced refresh is limited to one attempt per minute per card. A failed refresh retains the last good value and its original check time, with `!` and the last attempt in the tooltip. Cross-tab cache updates are observed; tabs do not share one request budget.
-
-The summary endpoint currently exposes only an average by rarity. It does not report sales count, dispersion or calculation window: **average only**, not a promise of fair value. The 24-hour cache is not a sales window. Shiny premiums are not separately exposed. Successful fetches record one local observation per rarity per UTC day for 90 days, bounded to 300 catalogue IDs. Rechecking on the same day replaces that day's observation. The graph connects adjacent observed days only; missing/no-sales days remain gaps. Nothing is backfilled from an older cache or invented before the first observation.
-
-**Sales** requests the game's individual settled-sales endpoint only on demand. WikiMasters currently requires PRO; a `403 pro_required` is shown explicitly. When accessible, analyses use unique, valid settled sales of the selected rarity in the preceding 30 days (at most 2,000 returned rows, unknown endpoint coverage). Median needs ≥5 sales. An indicative P25–P75 range needs ≥10; it describes the middle half of the accessible sample, not a prediction interval. Outliers outside 1.5 × IQR are counted and retained. Confidence is insufficient below 5, low otherwise, and moderate only from 20 sales with IQR ≤max(1 W, median) and ≤10% outliers. It is never labelled high. Sample count, observed dates and method are visible. Analyses stay in memory per account and clear on account change; no purchase, sale or trade is initiated by price tools.
-
-On `/pulls`, leave **Packs per manual run** empty to open all available packs (up to 100), or enter a limit from 1 to 100. Click the opening button twice within eight seconds to confirm. The extension opens packs one at a time without the game's animations and shows progress as it goes. Use the same button to stop a manual run. After a manual or automatic run, **Last run** opens in the side panel with the received cards, their rarities, available average sale prices, a total for priced cards, and the stop or error reason. Cards with known prices appear from most to least expensive; cards without a price follow in opening order. For multiple packs, a small tag shows each card's pack number. You can collapse the summary; a long card list scrolls inside the panel. An ellipsis means a price is loading, a dash means no sales, and an exclamation mark signals a request error; hover for the reason and check time. The summary remains available after the page reloads and belongs to the detected account in that tab. Earlier summaries cannot gain card details retroactively. The page reloads after a run that opened at least one pack so the game's own remaining-pack counter stays current. The panel can be shown or hidden at any screen size, and your choice is saved in this browser.
-
-The panel also lets you enable automatic opening and set a minimum and maximum delay in minutes. Those settings and the next opening time appear only while automation is enabled. The time uses the browser's local 24-hour format. Keep a WikiMasters tab open for the schedule to run. Tabs share one scheduled time, and only one tab opens packs at a time. Each automatic cycle stops after 100 packs or when the game reports that none remain. Run the manual action again if the 100-pack limit is reached with packs still available. Turn the automation toggle off to stop an automatic cycle.
-
-If WikiMasters asks for human verification, the Toolbox pauses manual and automatic opening and shows a short notice even when automation is off. The pause is shared between tabs and survives reloads; it does not retry the challenge. Use the game’s own **Open** button on `/pulls` to display its verification popup. Turnstile may validate automatically or ask for interaction. After a successful native pack opening, the Toolbox unlocks the manual action and schedules the next automatic cycle using your usual interval, if enabled. Restart a stopped manual run yourself. Received cards remain in the run summary, and the Toolbox avoids reloading while verification is pending. It does not read or store challenge tokens.
-
-Pack statistics count cards by rarity and packs opened through the game's normal button, the manual Toolbox button, and automatic opening. Counts are stored locally in this browser for the detected WikiMasters account. Existing shared counts from earlier Toolbox versions remain in browser storage but are not assigned to any account, since they may include packs from different accounts. New account-specific totals therefore start at zero. The previous daily-reset preference is retained as the initial setting. **Reset** clears the current account's counts after confirmation. **Daily reset** resets those counts at the next local midnight, or on the next visit if Chrome was closed.
-
-## Releases
-
-Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) (`feat:`, `fix:`, `docs:`, etc.). CI checks every PR and pushes to `develop` and `main`. On `main`, semantic-release calculates the next semantic version from the Git tags and commits, updates `package.json` and `manifest.json` in the release workspace, packages the extension, creates a Git tag, and attaches the ZIP to a GitHub Release. It does not push a version commit to `main`. The GitHub Release and packaged manifest identify the published version; tracked version fields remain development metadata. The Chrome publication workflow checks out the release tag and applies its version before rebuilding the package.
-
-Protect `main` by requiring a pull request, the GitHub Actions `check` status with an up-to-date branch, and resolved review conversations. Enforce these rules for administrators, block force pushes and branch deletion, and require zero external approvals while there is only one maintainer. Keep merge commits available to preserve Conventional Commits. The release workflow uses `GITHUB_TOKEN` to create tags and releases without pushing commits to the protected branch, so it needs no branch-protection bypass or additional token. Only the CI check belongs in the required checks; release and Store publication run after the merge.
-
-Chrome Web Store publication is prepared through the [Chrome Web Store API v2](https://developer.chrome.com/docs/webstore/using-api). Initial setup is required:
-
-1. Create the extension item in the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole), complete its listing and privacy fields, and upload the first version manually if the API does not yet accept updates to the item.
-2. Enable two-step verification on the publishing Google account. Enable the Chrome Web Store API in Google Cloud. Create a **Web application** OAuth client with `https://developers.google.com/oauthplayground` as its authorized redirect URI. Set the OAuth audience to **External** and its publishing status to **In production** before obtaining the refresh token; tokens issued in Testing expire after seven days. In OAuth Playground, use **your own OAuth credentials**, the **Offline** access type and only the `https://www.googleapis.com/auth/chromewebstore` scope. Authorize with the Google account that owns the Store item and exchange the authorization code for tokens. Google's [API reference](https://developer.chrome.com/docs/webstore/api#client-verification) confirms that an unverified OAuth client can manage the developer's own extensions; public branding verification is separate from Store review. Keep the client secret downloaded at creation: Google may not show it again.
-3. Add repository or `chrome-web-store` environment secrets: `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`, `CWS_REFRESH_TOKEN`, `CWS_PUBLISHER_ID`, and `CWS_EXTENSION_ID`. Add the repository variable `CWS_ENABLED=true` once the item is ready.
-4. With those secrets supplied as environment variables locally, run `node scripts/publish-chrome.mjs --verify` to refresh the token and read the existing item's status. This checks the account, publisher and extension access without uploading or submitting anything, and does not require a built package.
-5. Merge `develop` into `main` through a reviewed PR. Preserve the feature/fix commits with a normal merge, or use a Conventional Commit title when squashing. Each new GitHub Release then dispatches the publication workflow. It uploads the versioned ZIP and submits it for review; the current script requests automatic publication after approval. A failed Chrome submission can be retried from **Actions > Publish Chrome extension > Run workflow**, using the existing release tag, for example `v1.1.0`. Store review and final availability remain controlled by Google. Keep the Store description, screenshots and privacy declarations current in the dashboard; the API does not update them.
-
-For a manual update before automation is configured, download the ZIP from the GitHub Release, open the existing Store item and use **Package > Upload new package**, then save the draft and submit it for review. Use the versioned release ZIP rather than a development CI artifact that may still have the previous version number. Publishing an update keeps the same extension ID and user installation.
-
-Do not commit credentials. The GitHub repository must be public before using its `PRIVACY.md` URL as the Store privacy policy URL.
-
-## Validation limits
-
-Price checks cover exact rarity, deduplication, legacy/malformed cache, retained prices after failures, server pauses, reload-persistent read budgets, bounded/cancellable batches, account changes, daily observations with gaps, native cached catalogue pages, PRO gating and sample-size thresholds. Chrome verification covered global catalogue prices, the price inspector and PRO message, compact/full trade cards, market footer placement and a batch limited to one request. Individual sales analyses are verified with fixtures matching the native response schema; the signed-in account cannot access PRO sales, so live median/range validation remains unavailable.
-
-Collection checks cover distinct possession IDs and variants, ambiguous titles, interrupted loading and restoration, bounded server retries, account changes, native mutation notifications, changed totals and duplicate IDs across pages. Chrome verification loaded all 240 copies across five pages, restored a traversal interrupted by a reload at 200 copies, and resumed it to completion. A native favorite change invalidated the index and triggered synchronization; the favorite was then restored to its original state. Live sales and accepted trades have not been executed as part of this verification.
-
-Selection/action tests cover all pages, retained quantities, default protections, manual adjustments, changed snapshots, account changes, lock contention, in-flight stop, per-copy rejection and uncertain outcomes/journal restoration. Live selection and preview were checked across all collection pages, including exact rarity totals after explicitly disabling unique-copy retention. A confirmed native discard succeeded, updated the game collection and balance, and restored its successful receipt after the automatic reload. The complete index then resynchronized.
-
-The automated checks validate the build, package, API interception, manual limits, account-specific statistics, shared scheduling, mocked pack opening, and daily statistics reset. The extension was also loaded in Chrome and checked on signed-in collection, marketplace detail, and pack pages. Automatic opening and a one-pack manual run have been verified on the live game. The manual run updated account-specific statistics and kept its summary after the game's pack counter refreshed from 5 to 4 on reload. The game's price requests can fail temporarily during busy periods, so affected cards display `!` (or retain the last checked price with `!`) and may be retried after the pause. A supported way to refresh the game's on-page pack counter without reloading was not found, so the extension retains the page reload after opening packs.
+To retry a failed submission, run **Actions → Publish Chrome extension → Run workflow** on `main` with the existing release tag. Store listing text, screenshots and privacy declarations are maintained separately in the Developer Dashboard.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE).

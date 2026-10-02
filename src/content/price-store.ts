@@ -1,13 +1,10 @@
-import { getAccountId } from './account'
 import {
-  analyzeSales,
   appendObservation,
   type Observation,
   PRICE_TTL,
   parseSummary,
   RARITIES,
   RETRY_DELAY,
-  type SaleAnalysis,
   type Summary,
 } from './price-model'
 
@@ -407,61 +404,6 @@ export async function startPriceBatch(
   }
 }
 
-export type Detail = {
-  status: 'idle' | 'loading' | 'available' | 'pro-required' | 'unavailable'
-  at: number
-  analyses?: Record<string, SaleAnalysis>
-}
-const details = new Map<string, Detail>()
-export function readPriceDetail(id: string): Detail {
-  return details.get(`${getAccountId()}:${id}`) ?? { status: 'idle', at: 0 }
-}
-export function requestPriceDetail(id: string): Promise<void> {
-  const account = getAccountId()
-  const key = `${account}:${id}`
-  const old = details.get(key)
-  if (
-    old &&
-    (old.status === 'loading' ||
-      Date.now() - old.at <
-        (old.status === 'available' ? PRICE_TTL : RETRY_DELAY))
-  )
-    return Promise.resolve()
-  if (priceRequestLimit()) return Promise.resolve()
-  details.set(key, { status: 'loading', at: Date.now() })
-  notify()
-  return schedule(`detail:${key}`, async () => {
-    if (getAccountId() !== account) return
-    try {
-      const response = await get(
-        `/api/marketplace/cards/${encodeURIComponent(id)}/sales`,
-      )
-      const json = await response.json()
-      if (getAccountId() !== account) return
-      if (response.status === 403 && json.code === 'pro_required')
-        details.set(key, { status: 'pro-required', at: Date.now() })
-      else {
-        if (!response.ok || !Array.isArray(json.sales))
-          throw new Error('Invalid sales')
-        const analyses: Record<string, SaleAnalysis> = {}
-        for (const rarity of RARITIES)
-          analyses[rarity] = analyzeSales(json.sales, rarity)
-        details.set(key, { status: 'available', at: Date.now(), analyses })
-      }
-    } catch {
-      if (getAccountId() === account)
-        details.set(key, { status: 'unavailable', at: Date.now() })
-    }
-  }).then(() => {
-    if (details.get(key)?.status === 'loading')
-      details.set(key, { status: 'unavailable', at: Date.now() })
-    notify()
-  })
-}
-export function resetPriceAccount(): void {
-  cancelPriceBatch()
-  details.clear()
-}
 export function syncPricesFromStorage(key: string | null): void {
   if (!key || key.startsWith(PREFIX)) {
     entries.clear()

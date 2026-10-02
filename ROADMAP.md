@@ -1,6 +1,6 @@
 # Roadmap — WikiMasters Toolbox
 
-Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur compagnon de WikiMasters. Il rassemble les besoins observés dans le jeu et dans l'écosystème des extensions, sans classement par origine des idées. Les entrées décrivent le résultat attendu ; elles ne supposent pas qu'une API existe déjà.
+Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur compagnon de WikiMasters. Il rassemble les besoins observés dans le jeu et dans l'écosystème des extensions, sans classement par origine des idées. Les entrées décrivent le résultat attendu ; elles ne supposent pas qu'une API existe déjà. Toutes les fonctionnalités doivent être utilisables avec un compte gratuit WikiMasters.
 
 **Document préparé le 1er octobre 2026, à partir de l'inventaire du 30 septembre.** Toolbox affiche déjà les prix moyens et leur fraîcheur dans la collection, le marché et les paquets. La page `/pulls` possède son panneau, l'ouverture manuelle et automatique, le récapitulatif et les statistiques par compte. Les points ci-dessous concernent le travail restant, y compris l'amélioration de ces fonctions.
 
@@ -9,6 +9,7 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 - **P0** : socle ou irritant majeur à traiter en premier. **P1** : forte valeur après le socle. **P2** : enrichissement utile, à lancer une fois les parcours principaux solides.
 - **D1** : petit ajout local, environ une demi-journée à deux jours. **D2** : quelques jours. **D3** : une à deux semaines. **D4** : plusieurs semaines ou plusieurs parcours à coordonner. **D5** : recherche importante, dépendance externe ou changement d'architecture. Ces tailles sont relatives, pas des délais promis.
 - **À valider** : vérifier d'abord le comportement du jeu, les données accessibles et les règles applicables. La difficulté pourra changer après ce diagnostic.
+- Une fonctionnalité peut être recréée gratuitement dans Toolbox avec des calculs locaux ou des données accessibles à tous, même si le jeu facture sa propre version. Le compte gratuit doit suffire pour utiliser l'implémentation de l'extension.
 - Pour les actions qui consomment, défaussent, vendent ou échangent des cartes : toujours montrer les cartes et quantités exactes, préserver les exclusions choisies, puis faire confirmer l'action. Favoriser les parcours officiels du jeu. Les [règles de WikiMasters](https://www.wiki-masters.com/rules) encadrent l'automatisation et l'interception du trafic ; vérifier leur compatibilité avant d'étendre les automatismes existants.
 - Les prix actuellement reçus sont des moyennes pour chaque carte, déclinées par rareté. La réponse utilisée par Toolbox ne précise ni leur période de calcul ni le nombre de ventes. La durée de 24 h du cache Toolbox n'est pas une période de ventes.
 
@@ -16,7 +17,7 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 
 1. Fiabiliser l'identité des cartes et copies possédées, puis charger toute la collection avec progression et reprise (**DATA-01 à DATA-04**).
 2. Construire la sélection avancée et la défausse par rareté, avec simulation et confirmation (**COL-01 à COL-05**).
-3. Étendre le moteur de prix aux vues globales, aux échanges et aux ventes, en montrant la qualité des données (**PRICE-01 à PRICE-08**).
+3. Étendre le moteur de prix aux vues globales, aux échanges et aux ventes, en montrant la qualité des données (**PRICE-01 à PRICE-06**).
 4. Ajouter le classement des cartes de la collection et les aides à la vente sans multiplier les requêtes inutiles (**COL-14, MARKET-01 à MARKET-05**).
 5. Créer les familles de cartes et la liste de manquantes, puis les relier au marché (**FAM-01 à FAM-09**).
 
@@ -43,10 +44,10 @@ Backlog de fonctionnalités à construire pour faire de Toolbox le meilleur comp
 - [x] **PRICE-04 · P0 · D3 — Signal de confiance du prix.** Si la source expose un jour volume, période ou dispersion, les montrer. Jusque-là, signaler « moyenne seule » et éviter toute promesse de prix juste.
 - [x] **PRICE-05 · P1 · D3 — Rafraîchissement ciblé.** Actualiser une carte, une sélection ou une rareté sans vider tout le cache ; respecter les limites et montrer la dernière tentative.
 - [x] **PRICE-06 · P1 · D4 — Historique local des observations.** Enregistrer les prix réellement vus au fil des jours pour tracer une évolution, avec un indicateur de trous et sans inventer d'historique antérieur.
-- [x] **PRICE-07 · P1 · D5 — Estimation robuste à partir des ventes.** Étudier les transactions accessibles, la médiane, les valeurs extrêmes et le volume par rareté ; n'afficher une estimation alternative que si l'échantillon est suffisant. **Accès :** WikiMasters PRO ; l’analyse utilise les ventes accessibles réglées dans les 30 derniers jours, avec couverture inconnue.
-- [x] **PRICE-08 · P1 · D3 — Fourchette et incertitude.** Montrer une plage indicative et un niveau de confiance quand les données le permettent, avec une explication courte de la méthode.
+- [ ] **PRICE-07 · P1 · D5 — Estimation robuste à partir des ventes.** Constituer un échantillon fiable avec les données accessibles gratuitement : API disponible ou observations natives de ventes conclues. Étudier médiane, valeurs extrêmes et volume par rareté ; ne proposer aucun calcul sans données suffisantes et méthode explicite.
+- [ ] **PRICE-08 · P1 · D3 — Fourchette et incertitude.** Dépend de PRICE-07 et de données accessibles gratuitement. Montrer une plage indicative uniquement si l’échantillon le permet, avec une explication courte de la méthode.
 
-**Livré le 1er octobre 2026 (PRICE-01 à PRICE-08).** Moteur partagé, prix centrés sous les statistiques des grilles, toolbox de chargement/actualisation par page, sélection et rareté, progression/plafond/arrêt, états et fraîcheur communs, historique local de 90 jours sans interpolation. La moyenne native ne précise ni fenêtre ni volume : les 24 h sont le TTL du cache. Les ventes individuelles exigent actuellement WikiMasters PRO ; l’analyse reste conditionnelle à cet accès, sur les transactions valides des 30 derniers jours retournées par l’API. Médiane à partir de 5 ventes, plage P25–P75 à partir de 10, confiance prudente et couverture inconnue explicites. Les analyses sont testées sur fixtures ; leur validation sur un compte PRO reste à effectuer.
+**Livré le 1er octobre 2026 (PRICE-01 à PRICE-06).** Moteur partagé, prix centrés sous les statistiques des grilles, toolbox de chargement/actualisation par page, sélection et rareté, progression/plafond/arrêt, états et fraîcheur communs, historique local de 90 jours sans interpolation. La moyenne native ne précise ni fenêtre ni volume : les 24 h sont le TTL du cache. **Périmètre révisé le 2 octobre :** l’extension utilise uniquement les données accessibles avec un compte gratuit. PRICE-07 et PRICE-08 restent au backlog dans l’attente d’une source gratuite adaptée ; l’inspecteur affiche actuellement les moyennes et les observations locales.
 
 - [ ] **PRICE-09 · P1 · D3 — Valeur de la collection.** Totaliser uniquement les cartes dont le prix est connu, afficher le nombre et la part non évalués, puis distinguer valeur de toutes les copies et valeur des seuls doublons.
 - [ ] **PRICE-10 · P1 · D3 — Fraîcheur adaptée au contexte.** Définir un âge acceptable plus court lors d'une vente ou d'un échange que pendant la consultation de l'album ; proposer une actualisation ciblée avant décision et conserver l'âge visible si elle échoue.

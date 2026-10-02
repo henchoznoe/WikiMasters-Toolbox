@@ -94,7 +94,7 @@ test('the network bridge exposes only relevant card data and preserves fetch res
                 ],
               }
             : String(url).includes('/rest/v1/profiles')
-              ? [{ id: ACCOUNT_A, is_pro: false }]
+              ? [{ id: ACCOUNT_A, username: 'Example' }]
               : responseBody,
         ),
         {
@@ -163,7 +163,7 @@ test('the network bridge exposes only relevant card data and preserves fetch res
   assert.equal(events.length, 3)
 
   await window.fetch(
-    `https://example.supabase.co/rest/v1/profiles?select=id%2Cis_pro&id=eq.${ACCOUNT_A}`,
+    `https://example.supabase.co/rest/v1/profiles?select=id%2Cusername&id=eq.${ACCOUNT_A}`,
   )
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.deepEqual(JSON.parse(events[3].detail), {
@@ -892,7 +892,7 @@ test('the bridge recognizes the current single-profile response and forwards onl
   const window = {
     fetch: async url =>
       String(url).includes('/profiles')
-        ? new Response(JSON.stringify({ id: ACCOUNT_A, is_pro: false }))
+        ? new Response(JSON.stringify({ id: ACCOUNT_A, username: 'Example' }))
         : new Response(
             JSON.stringify({
               human_verification_required: true,
@@ -921,7 +921,7 @@ test('the bridge recognizes the current single-profile response and forwards onl
     WeakMap,
   })
   await window.fetch(
-    `https://example.supabase.co/rest/v1/profiles?select=id%2C+is_pro&id=eq.${ACCOUNT_A}`,
+    `https://example.supabase.co/rest/v1/profiles?select=id%2C+username&id=eq.${ACCOUNT_A}`,
   )
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.deepEqual(events, [{ kind: 'account', accountId: ACCOUNT_A }])
