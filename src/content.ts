@@ -16,6 +16,8 @@ import {
   AUTO_KEY,
   getPrefs,
   MANUAL_LIMIT_KEY,
+  observeNativePack,
+  requirePackVerification,
   scheduleAuto,
   syncManualLimitFromStorage,
   syncPrefsFromStorage,
@@ -106,6 +108,10 @@ if (!contentWindow.__wmToolboxContentInstalled) {
         return
       }
       if (data.accountId !== getAccountId()) return
+      if (data.kind === 'pack-verification-required') {
+        requirePackVerification()
+        return
+      }
       if (data.kind === 'collection-changed') {
         invalidateCollection()
         return
@@ -118,7 +124,10 @@ if (!contentWindow.__wmToolboxContentInstalled) {
         const cards = data.cards.filter(isCard)
         if (data.kind === 'collection') observeCollection(cards)
         registerCards(cards, data.kind)
-        if (data.kind === 'pack') void recordPack(cards)
+        if (data.kind === 'pack' && cards.length) {
+          observeNativePack()
+          void recordPack(cards)
+        }
       }
     } catch {
       /* Invalid event. */

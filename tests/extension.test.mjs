@@ -762,3 +762,177 @@ test('temporary game rate limits pause and retry pack opening', async () => {
   assert.equal(requests, 2)
   assert.equal(result.packs_remaining, 0)
 })
+
+for (const [mode, beforeChallenge] of [
+  ['manual', 0],
+  ['manual', 1],
+  ['auto', 0],
+]) {
+  test(`${mode} opening pauses for verification after ${beforeChallenge} packs and survives reload`, async () => {
+    const stored = new Map([
+      [
+        'wm_toolbox_auto_v1',
+        JSON.stringify({
+          enabled: mode === 'auto',
+          minMinutes: 60,
+          maxMinutes: 60,
+          nextAt: Date.now() - 1000,
+        }),
+      ],
+    ])
+    let requests = 0
+    let reloads = 0
+    const timers = new Map()
+    let timerId = 0
+    const makeContext = () => ({
+      window: { addEventListener() {} },
+      document: { querySelector: () => null },
+      location: {
+        pathname: '/pulls',
+        reload: () => {
+          reloads += 1
+        },
+      },
+      localStorage: {
+        getItem: key => stored.get(key) || null,
+        setItem: (key, value) => stored.set(key, value),
+      },
+      sessionStorage: {
+        getItem: key => stored.get(`session:${key}`) || null,
+        setItem: (key, value) => stored.set(`session:${key}`, value),
+      },
+      navigator: {
+        locks: {
+          request: (_name, options, callback) =>
+            typeof options === 'function' ? options() : callback({}),
+        },
+      },
+      CSSStyleSheet: class {
+        replaceSync() {}
+      },
+      IntersectionObserver: class {
+        observe() {}
+      },
+      fetch: async () => {
+        requests += 1
+        return requests <= beforeChallenge
+          ? new Response(
+              JSON.stringify({
+                cards: [{ id: `card-${requests}`, rarity: 'C' }],
+                packs_remaining: 10,
+              }),
+            )
+          : new Response(
+              JSON.stringify({
+                human_verification_required: true,
+                rate_limited: true,
+              }),
+              { status: 403 },
+            )
+      },
+      AbortController,
+      setTimeout: (callback, delay) => {
+        const id = ++timerId
+        if (delay < 10000) queueMicrotask(callback)
+        else timers.set(id, callback)
+        return id
+      },
+      clearTimeout: id => timers.delete(id),
+      Date,
+    })
+    const names = [
+      'runPacks',
+      'scheduleAuto',
+      'getPrefs',
+      'getStatus',
+      'observeNativePack',
+      'setAutoEnabled',
+    ]
+    const extra =
+      "import { setAccountId } from './src/content/account.ts'; globalThis.setAccountId = setAccountId"
+    const context = makeContext()
+    await exposeModule('packs', names, context, extra)
+    context.setAccountId(ACCOUNT_A)
+    await context.runPacks(mode)
+    assert.equal(requests, beforeChallenge + 1)
+    assert.equal(context.getPrefs().verificationRequired, true)
+    assert.equal(context.getPrefs().nextAt, 0)
+    assert.match(context.getStatus(), /Verification required/)
+    assert.equal(timers.size, 0)
+    assert.equal(reloads, 0)
+    const summary = JSON.parse(
+      stored.get('session:wm_toolbox_last_pack_run_v1'),
+    )
+    assert.equal(summary.opened, beforeChallenge)
+    assert.equal(summary.cards.length, beforeChallenge)
+    assert.match(summary.detail, /Verification required/)
+    const stats = stored.get(`wm_toolbox_pack_stats_v2:${ACCOUNT_A}`)
+    assert.equal(stats ? JSON.parse(stats).packs : 0, beforeChallenge)
+
+    const reloaded = makeContext()
+    await exposeModule('packs', names, reloaded, extra)
+    reloaded.setAccountId(ACCOUNT_A)
+    reloaded.setAutoEnabled(true)
+    reloaded.scheduleAuto()
+    await reloaded.runPacks('auto')
+    await reloaded.runPacks('manual')
+    assert.equal(requests, beforeChallenge + 1)
+    assert.equal(timers.size, 0)
+    assert.equal(reloaded.getPrefs().nextAt, 0)
+    assert.match(reloaded.getStatus(), /Verification required/)
+    reloaded.observeNativePack()
+    assert.equal(reloaded.getPrefs().verificationRequired, false)
+    assert.ok(reloaded.getPrefs().nextAt > Date.now())
+    assert.equal(timers.size, 1)
+  })
+}
+
+test('the bridge recognizes the current single-profile response and forwards only a verification notice', async () => {
+  const events = []
+  const window = {
+    fetch: async url =>
+      String(url).includes('/profiles')
+        ? new Response(JSON.stringify({ id: ACCOUNT_A, is_pro: false }))
+        : new Response(
+            JSON.stringify({
+              human_verification_required: true,
+              private_field: 'never forward',
+            }),
+            { status: 403 },
+          ),
+    dispatchEvent: event => events.push(JSON.parse(event.detail)),
+  }
+  class FakeXHR {
+    open() {}
+    send() {}
+  }
+  class FakeEvent {
+    constructor(_type, options) {
+      this.detail = options.detail
+    }
+  }
+  vm.runInNewContext(await readFile(new URL('network.js', dist), 'utf8'), {
+    window,
+    location: { origin: 'https://www.wiki-masters.com' },
+    XMLHttpRequest: FakeXHR,
+    Request,
+    CustomEvent: FakeEvent,
+    URL,
+    WeakMap,
+  })
+  await window.fetch(
+    `https://example.supabase.co/rest/v1/profiles?select=id%2C+is_pro&id=eq.${ACCOUNT_A}`,
+  )
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.deepEqual(events, [{ kind: 'account', accountId: ACCOUNT_A }])
+  const response = await window.fetch('/api/packs/open', { method: 'POST' })
+  assert.equal((await response.json()).human_verification_required, true)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.deepEqual(events[1], {
+    kind: 'pack-verification-required',
+    accountId: ACCOUNT_A,
+  })
+  await window.fetch('https://example.com/api/packs/open', { method: 'POST' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(events.length, 2)
+})
