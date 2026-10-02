@@ -5,6 +5,11 @@ import {
   stopCollectionLoad,
 } from './collection'
 import { getSelectionState } from './collection-actions'
+import {
+  createMarketControls,
+  createRankingControls,
+  renderMarketPanel,
+} from './market-panel'
 import { createPriceControls } from './price-panel'
 import { registerCards } from './prices'
 import {
@@ -55,6 +60,8 @@ export function createCollectionBody(): HTMLElement {
     note,
     createSelectionControls(),
     createPriceControls(),
+    createRankingControls(),
+    createMarketControls(),
   )
   return body
 }
@@ -114,6 +121,7 @@ export function renderCollectionPanel(): void {
     : (state.error ?? '')
   note.hidden = !note.textContent
   renderSelectionPanel()
+  renderMarketPanel()
 }
 
 export function mountCollectionBody(): void {
