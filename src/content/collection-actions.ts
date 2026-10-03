@@ -139,15 +139,22 @@ export function parseCommitments(
     !Array.isArray(trades.trades)
   )
     throw new Error('Sale / trade protections unavailable')
-  const result: Commitments = { catalogueIds: new Set(), copyIds: new Set() }
+  const result: Commitments = {
+    catalogueIds: new Set(),
+    copyIds: new Set(),
+    saleCopyIds: new Set(),
+    tradeCopyIds: new Set(),
+  }
   for (const auction of market.selling) {
     if (!auction || typeof auction !== 'object')
       throw new Error('Invalid sale protection')
     const copyId = nonemptyString(auction.user_card_id)
     const id =
       nonemptyString(auction.card_id) ?? nonemptyString(auction.card?.id)
-    if (copyId) result.copyIds.add(copyId)
-    else if (id) result.catalogueIds.add(id)
+    if (copyId) {
+      result.copyIds.add(copyId)
+      result.saleCopyIds?.add(copyId)
+    } else if (id) result.catalogueIds.add(id)
     else throw new Error('Sale identity unavailable')
   }
   // The native collection also protects trades at catalogue level, across copies.
@@ -169,6 +176,8 @@ export function parseCommitments(
       const id = nonemptyString(item.card_id)
       if (!id) throw new Error('Trade identity unavailable')
       result.catalogueIds.add(id)
+      const copyId = nonemptyString(item.user_card_id)
+      if (copyId) result.tradeCopyIds?.add(copyId)
     }
   }
   return result

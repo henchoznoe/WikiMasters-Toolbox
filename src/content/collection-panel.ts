@@ -5,6 +5,10 @@ import {
   stopCollectionLoad,
 } from './collection'
 import { getSelectionState } from './collection-actions'
+import {
+  createCollectionBrowser,
+  renderCollectionBrowser,
+} from './collection-browser'
 import { collectionValue } from './collection-value'
 import {
   createMarketControls,
@@ -61,6 +65,7 @@ export function createCollectionBody(): HTMLElement {
     progress,
     actions,
     note,
+    createCollectionBrowser(),
     createSelectionControls(),
     createPriceControls(),
     createValueControls(),
@@ -124,6 +129,7 @@ export function renderCollectionPanel(): void {
     ? 'The game is busy; retrying the current page.'
     : (state.error ?? '')
   note.hidden = !note.textContent
+  renderCollectionBrowser()
   renderSelectionPanel()
   renderCollectionValue()
   renderMarketPanel()
