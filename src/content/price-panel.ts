@@ -1,6 +1,10 @@
 import { getCollectionState } from './collection'
 import { getSelectionState } from './collection-actions'
 import { currentPriceContext } from './price-context'
+import {
+  createPriceInsights,
+  renderPriceInsights,
+} from './price-insights-panel'
 import { RARITIES } from './price-model'
 import {
   cancelPriceBatch,
@@ -18,6 +22,7 @@ export function createPriceControls(): HTMLElement {
   details.className = 'wm-price-controls'
   const summary = document.createElement('summary')
   summary.textContent = 'Prices'
+  summary.dataset.priceControlsSummary = '1'
   const controls = document.createElement('div')
   controls.className = 'wm-price-controls-body'
   const scope = document.createElement('select')
@@ -118,6 +123,7 @@ export function createPriceControls(): HTMLElement {
     progress,
     state,
   )
+  controls.append(createPriceInsights())
   details.append(summary, controls)
   scope.addEventListener('change', renderPricePanel)
   force.addEventListener('change', renderPricePanel)
@@ -130,6 +136,7 @@ export function createPricesBody(): HTMLElement {
   return body
 }
 export function renderPricePanel(): void {
+  renderPriceInsights()
   const root = document.querySelector('[data-wm-toolbox-panel]')?.shadowRoot
   if (!root) return
   const state = getPriceBatch()

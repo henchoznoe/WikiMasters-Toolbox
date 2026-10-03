@@ -4,7 +4,9 @@ import {
   parsePageCards,
   resolvePageAdapter,
 } from './page-adapters'
+import { mapPriceListing } from './price-comparison'
 import { currentPriceContext } from './price-context'
+import { observePriceListings } from './price-listings'
 import { presentPrice } from './price-presentation'
 import { requestJson } from './requests'
 import { saleSample } from './sales-model'
@@ -403,6 +405,7 @@ export async function hydrateRoute(): Promise<void> {
         : json.auction
           ? [json.auction]
           : []
+      observePriceListings(rows.map(mapPriceListing).filter(Boolean))
       observeSaleSamples(
         rows.slice(0, 1000).flatMap(row => {
           const sample = saleSample(row)
