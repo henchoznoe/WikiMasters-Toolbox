@@ -15,6 +15,7 @@ import {
   getMarketState,
   loadMarket,
 } from './market-store'
+import { statusLabel } from './presentation'
 import { createPriceControls, renderPricePanel } from './price-panel'
 import { presentPrice } from './price-presentation'
 import {
@@ -71,7 +72,10 @@ function section(title: string, key: string): HTMLDetailsElement {
 function price(id: string, rarity: string | null): HTMLElement {
   const quote = presentPrice(readPriceQuote(id, rarity))
   if (quote.status === 'loading')
-    return note('—', 'Price not loaded · use Prices for the loaded collection')
+    return note(
+      '—',
+      'Prix non chargé · utilisez « Prix » pour la collection chargée',
+    )
   return note(`${quote.value}${quote.age ? ` · ${quote.age}` : ''}`, quote.hint)
 }
 function draftControls(amount: number | null): {
@@ -87,9 +91,9 @@ function draftControls(amount: number | null): {
   input.step = '1'
   input.placeholder = '—'
   input.value = amount === null ? '' : String(Math.max(1, Math.ceil(amount)))
-  input.setAttribute('aria-label', 'Proposed starting price (W)')
+  input.setAttribute('aria-label', 'Mise de départ proposée (W)')
   const duration = document.createElement('select')
-  duration.setAttribute('aria-label', 'Proposed sale duration')
+  duration.setAttribute('aria-label', 'Durée de vente proposée')
   for (const value of SALE_DURATIONS) {
     const option = document.createElement('option')
     option.value = String(value)
@@ -101,9 +105,11 @@ function draftControls(amount: number | null): {
   return { body, amount: input, duration }
 }
 export function createRankingControls(): HTMLElement {
-  const details = section('Most expensive', 'wmRanking')
+  const details = section('Les plus chères', 'wmRanking')
   details.append(
-    note('Load collection, then prices. Missing prices remain visible.'),
+    note(
+      'Chargez la collection, puis les prix. Les prix manquants restent visibles.',
+    ),
   )
   const content = document.createElement('div')
   content.dataset.wmRankingBody = '1'
@@ -159,7 +165,7 @@ export function renderRanking(): void {
   const fragment = document.createDocumentFragment()
   fragment.append(
     note(
-      `${rows.length} variants · ${rows.filter(row => row.quote.status !== 'available').length} without price${state.status !== 'complete' ? ' · partial index' : ''}`,
+      `${rows.length} variantes · ${rows.filter(row => row.quote.status !== 'available').length} sans prix${state.status !== 'complete' ? ' · index partiel' : ''}`,
     ),
   )
   for (const [offset, row] of rows
@@ -173,11 +179,11 @@ export function renderRanking(): void {
     title.textContent = `${rankingPage * 10 + offset + 1}. ${row.card.title}`
     const copies = document.createElement('select')
     copies.dataset.rankingCopy = '1'
-    copies.setAttribute('aria-label', `Choose copy of ${row.card.title}`)
+    copies.setAttribute('aria-label', `Choisir une copie de ${row.card.title}`)
     for (const copy of row.copies) {
       const option = document.createElement('option')
       option.value = copy.copyId
-      option.textContent = `Copy ${copy.copyId.slice(0, 8)}${copy.starred ? ' ★' : ''}${copy.tagIds.length ? ' · tagged' : ''}`
+      option.textContent = `Copie ${copy.copyId.slice(0, 8)}${copy.starred ? ' ★' : ''}${copy.tagIds.length ? ' · avec étiquette' : ''}`
       copies.append(option)
     }
     const controls = draftControls(
@@ -190,7 +196,7 @@ export function renderRanking(): void {
       controls.amount.value = savedDraft.amount
       controls.duration.value = savedDraft.duration
     }
-    const prepare = button('Prepare sale', () => {
+    const prepare = button('Préparer la vente', () => {
       const amount = Number(controls.amount.value),
         duration = Number(controls.duration.value)
       if (!validSaleDraft(amount, duration)) {
@@ -204,13 +210,15 @@ export function renderRanking(): void {
         sale: true,
       })
     })
-    const inspect = button('Inspect', () => inspectCopy(copies.value))
+    const inspect = button('Inspecter', () => inspectCopy(copies.value))
     prepare.disabled = state.status !== 'complete'
     item.append(
       title,
       createRarityBadge(row.card.rarity ?? '?'),
       price(row.card.id, row.card.rarity),
-      note(`${row.copies.length} copies${row.card.shiny ? ' · shiny' : ''}`),
+      note(
+        `${row.copies.length} copies${row.card.shiny ? ' · brillante' : ''}`,
+      ),
       copies,
       inspect,
       controls.body,
@@ -226,14 +234,14 @@ export function renderRanking(): void {
     renderRanking()
   })
   previous.disabled = rankingPage === 0
-  previous.setAttribute('aria-label', 'Previous ranking page')
+  previous.setAttribute('aria-label', 'Page précédente du classement')
   const next = button('→', () => {
     rankingPage++
     rankingKey = ''
     renderRanking()
   })
   next.disabled = rankingPage + 1 >= pages
-  next.setAttribute('aria-label', 'Next ranking page')
+  next.setAttribute('aria-label', 'Page suivante du classement')
   navigation.append(previous, note(`${rankingPage + 1} / ${pages}`), next)
   fragment.append(navigation)
   body.replaceChildren(fragment)
@@ -254,32 +262,32 @@ function auctionRow(row: Auction): HTMLElement {
     link,
     createRarityBadge(row.card.rarity ?? '?'),
     note(
-      `Start ${row.base ?? '—'} W · best ${row.bid ?? '—'} W · ${end}`,
+      `Départ ${row.base ?? '—'} W · meilleure offre ${row.bid ?? '—'} W · ${end}`,
       row.endAt === null
-        ? 'End time unavailable'
-        : new Date(row.endAt).toLocaleString(),
+        ? 'Heure de fin indisponible'
+        : new Date(row.endAt).toLocaleString('fr-FR'),
     ),
     note(
       row.status === 'settled_sold'
-        ? `Sold · ${row.final ?? '—'} W`
+        ? `Vendue · ${row.final ?? '—'} W`
         : row.status === 'settled_unsold'
-          ? 'Unsold'
+          ? 'Invendue'
           : row.status === 'cancelled'
-            ? 'Cancelled'
+            ? 'Annulée'
             : row.status === 'active'
-              ? 'Active · result unknown'
-              : 'Result unknown',
+              ? 'Active · résultat inconnu'
+              : 'Résultat inconnu',
     ),
   )
   return node
 }
 export function createMarketControls(): HTMLElement {
-  const details = section('My sales', 'wmMySales')
+  const details = section('Mes ventes', 'wmMySales')
   details.append(
-    button('Refresh', () => {
+    button('Actualiser', () => {
       void loadMarket(true)
     }),
-    button('Stop', cancelMarketReads),
+    button('Arrêter', cancelMarketReads),
   )
   const list = document.createElement('div')
   list.dataset.wmSalesList = '1'
@@ -290,10 +298,13 @@ export function createMarketControls(): HTMLElement {
 export function createMarketBody(): HTMLElement {
   const body = document.createElement('div')
   body.className = 'wm-panel-body'
-  const comparables = section('Active comparables', 'wmPageComparables')
+  const comparables = section(
+    'Annonces comparables actives',
+    'wmPageComparables',
+  )
   const cards = document.createElement('select')
   cards.dataset.wmComparableCard = '1'
-  cards.setAttribute('aria-label', 'Card for active comparables')
+  cards.setAttribute('aria-label', 'Carte des annonces comparables actives')
   cards.addEventListener('change', () => {
     const card = getVisiblePriceCards().find(
       card => cardVariantKey(card) === cards.value,
@@ -302,10 +313,10 @@ export function createMarketBody(): HTMLElement {
     renderMarketPanel()
   })
   const order = document.createElement('select')
-  order.setAttribute('aria-label', 'Sort active comparables')
+  order.setAttribute('aria-label', 'Trier les annonces comparables actives')
   for (const [value, label] of [
-    ['end', 'End time'],
-    ['price', 'Price'],
+    ['end', 'Fin'],
+    ['price', 'Prix'],
   ]) {
     const option = document.createElement('option')
     option.value = value
@@ -320,10 +331,10 @@ export function createMarketBody(): HTMLElement {
   list.dataset.wmComparables = '1'
   comparables.append(
     cards,
-    button('Search / refresh', () => {
+    button('Rechercher / actualiser', () => {
       void loadMarket()
     }),
-    button('Stop', cancelMarketReads),
+    button('Arrêter', cancelMarketReads),
     order,
     list,
   )
@@ -351,7 +362,7 @@ export function renderMarketPanel(): void {
       for (const card of cards) {
         const option = document.createElement('option')
         option.value = cardVariantKey(card)
-        option.textContent = `${card.title} · ${card.rarity ?? '?'}${card.shiny ? ' · shiny' : ''}`
+        option.textContent = `${card.title} · ${card.rarity ?? '?'}${card.shiny ? ' · brillante' : ''}`
         selector.append(option)
       }
       const current = getMarketState().target
@@ -384,21 +395,21 @@ export function renderMarketPanel(): void {
             ? '…'
             : (state.error ??
                 (state.at
-                  ? `${state.rows.length} sales · ${new Date(state.at).toLocaleTimeString()}`
-                  : 'Refresh to load your sales')),
-          'Observed sales only · missing or expired listings do not imply a sale',
+                  ? `${state.rows.length} ventes · ${new Date(state.at).toLocaleTimeString('fr-FR')}`
+                  : 'Actualisez pour charger vos ventes')),
+          'Ventes observées uniquement · une annonce absente ou expirée ne prouve pas une vente',
         ),
       )
       for (const row of state.rows) list.append(auctionRow(row))
       if (journal) {
         const result = note(
-          `Last confirmation: ${journal.status === 'unknown' ? 'uncertain · verify in the game' : journal.status} · ${new Date(journal.at).toLocaleTimeString()}`,
+          `Dernière confirmation : ${journal.status === 'unknown' ? 'incertaine · vérifiez dans le jeu' : statusLabel(journal.status)} · ${new Date(journal.at).toLocaleTimeString('fr-FR')}`,
         )
         list.append(result)
         if (journal.auctionId) {
           const link = document.createElement('a')
           link.href = `/marketplace/${journal.auctionId}`
-          link.textContent = 'Open confirmed listing'
+          link.textContent = 'Ouvrir l’annonce confirmée'
           list.append(link)
         }
       }
@@ -430,13 +441,13 @@ function renderComparables(root: ShadowRoot): void {
         ? '…'
         : (state.error ??
             (state.at
-              ? `${rows.length} active · ${state.more ? 'partial search' : '✓'} · ${new Date(state.at).toLocaleTimeString()}`
-              : 'Search active comparables')),
-      'Same catalogue ID, rarity and shiny status · asking prices are not concluded sales · max 10 pages',
+              ? `${rows.length} actives · ${state.more ? 'recherche partielle' : '✓'} · ${new Date(state.at).toLocaleTimeString('fr-FR')}`
+              : 'Rechercher des annonces comparables actives')),
+      'Même ID du catalogue, rareté et variante brillante · les prix demandés ne sont pas des ventes conclues · max 10 pages',
     ),
   )
   for (const row of rows) list.append(auctionRow(row))
-  const more = button('More', () => {
+  const more = button('Suite', () => {
     void loadMarket(false, true)
   })
   more.disabled = state.loading || !state.more || state.page >= 10 || !state.at
@@ -462,7 +473,9 @@ export function renderSaleSupport(): void {
     const body = document.createElement('section')
     body.className = 'wm-sale-support'
     body.append(
-      note('Copy identity unavailable · reload the game before selling'),
+      note(
+        'Identité de la copie indisponible · rechargez le jeu avant de vendre',
+      ),
     )
     createToolboxRoot(saleHost).append(body)
     frame.append(saleHost)
@@ -491,22 +504,22 @@ export function renderSaleSupport(): void {
     label.className = 'wm-note'
     label.append(
       acknowledge,
-      ' Allow sale of a protected copy (favorite, tagged, shiny or retained)',
+      ' Autoriser la vente d’une copie protégée (favori, étiquette, brillante ou conservée)',
     )
-    const check = button('Check copy', () => {
+    const check = button('Vérifier la copie', () => {
       void checkSale(acknowledge.checked)
     })
     check.dataset.wmSaleCheck = '1'
-    const refresh = button('↻ price', () => {
+    const refresh = button('↻ prix', () => {
       if (getSaleState().card)
         void requestPriceQuote(getSaleState().card?.id ?? '', true)
     })
     refresh.dataset.wmSaleRefresh = '1'
     refresh.title =
-      'Refresh this card before deciding · sale prices should be checked within 15 min'
+      'Actualisez cette carte avant de décider · les prix de vente doivent dater de moins de 15 min'
     const draft = draftControls(null)
     draft.body.hidden = true
-    const apply = button('Apply proposal', () => {
+    const apply = button('Appliquer la proposition', () => {
       if (!pending || pending.copyId !== getSaleState().card?.copyId) return
       const amount = Number(draft.amount.value),
         duration = Number(draft.duration.value)
@@ -518,12 +531,15 @@ export function renderSaleSupport(): void {
       draft.duration.value = String(pending.duration)
       draft.body.hidden = false
     } else apply.hidden = true
-    const comparables = section('Active comparables', 'wmSaleComparables')
+    const comparables = section(
+      'Annonces comparables actives',
+      'wmSaleComparables',
+    )
     const order = document.createElement('select')
-    order.setAttribute('aria-label', 'Sort comparables')
+    order.setAttribute('aria-label', 'Trier les annonces comparables')
     for (const [value, text] of [
-      ['end', 'End time'],
-      ['price', 'Price'],
+      ['end', 'Fin'],
+      ['price', 'Prix'],
     ]) {
       const option = document.createElement('option')
       option.value = value
@@ -538,11 +554,11 @@ export function renderSaleSupport(): void {
     const list = document.createElement('div')
     list.dataset.wmComparables = '1'
     comparables.append(
-      button('Search / refresh', () => {
+      button('Rechercher / actualiser', () => {
         chooseComparables(getSaleState().card as NonNullable<typeof state.card>)
         void loadMarket()
       }),
-      button('Stop', cancelMarketReads),
+      button('Arrêter', cancelMarketReads),
       order,
       list,
     )
@@ -551,12 +567,12 @@ export function renderSaleSupport(): void {
       refresh,
       difference,
       note(
-        `Copy ${state.card.copyId?.slice(0, 8)} · 1 copy`,
-        'The game alone submits the sale after your confirmation',
+        `Copie ${state.card.copyId?.slice(0, 8)} · 1 copie`,
+        'Le jeu envoie la vente après votre confirmation',
       ),
       label,
       check,
-      button('Stop', stopSaleCheck),
+      button('Arrêter', stopSaleCheck),
       checkNote,
       draft.body,
       apply,
@@ -574,22 +590,22 @@ export function renderSaleSupport(): void {
   )
   const summary = root.querySelector<HTMLElement>('[data-wm-sale-quote]')
   if (summary) {
-    summary.textContent = `Average ${quote.value} · ${quote.age || '—'} · 15 min freshness`
+    summary.textContent = `Moyenne ${quote.value} · ${quote.age || '—'} · fraîcheur de 15 min`
     summary.title = quote.hint
   }
   const difference = root.querySelector<HTMLElement>(
     '[data-wm-sale-difference]',
   )
   if (difference)
-    difference.textContent = `Entered vs average: ${priceDifference(Number(input.value), readPriceQuote(state.card.id, state.card.rarity))}`
+    difference.textContent = `Saisie / moyenne : ${priceDifference(Number(input.value), readPriceQuote(state.card.id, state.card.rarity))}`
   const check = root.querySelector<HTMLButtonElement>('[data-wm-sale-check]')
   if (check) {
     check.disabled = state.busy || state.submitted
     check.textContent = state.busy
       ? '…'
       : state.checked
-        ? '✓ Check again'
-        : 'Check copy'
+        ? '✓ Vérifier à nouveau'
+        : 'Vérifier la copie'
   }
   const refresh = root.querySelector<HTMLButtonElement>(
     '[data-wm-sale-refresh]',
@@ -601,8 +617,8 @@ export function renderSaleSupport(): void {
       ? '…'
       : (state.error ??
         (state.checked
-          ? '✓ Confirm in the game within 30 s'
-          : 'Check collection / sale / trade protections'))
+          ? '✓ Confirmez dans le jeu sous 30 s'
+          : 'Vérifiez la collection et les protections de vente / échange'))
   renderComparables(root)
 }
 export function resetMarketPanel(): void {

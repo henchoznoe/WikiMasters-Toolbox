@@ -245,11 +245,11 @@ export function requestPriceQuote(id: string, force = false): Promise<void> {
         save(id, { fetchedAt: at, ok: false, notFound: true, averages: {} })
         return
       }
-      if (!response.ok) throw new Error('Price unavailable')
+      if (!response.ok) throw new Error('Prix indisponible')
       const averages = parseSummary(
         (json as Record<string, unknown> | null)?.summary,
       )
-      if (!averages) throw new Error('Invalid summary')
+      if (!averages) throw new Error('Récapitulatif invalide')
       save(id, { fetchedAt: at, ok: true, averages })
     } catch (cause) {
       if (cause instanceof RequestAdmissionError) return

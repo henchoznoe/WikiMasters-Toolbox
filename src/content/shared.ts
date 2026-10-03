@@ -8,6 +8,7 @@ export type { Card } from '../cards'
 import type { Card } from '../cards'
 
 export function createToolboxRoot(host: HTMLElement): ShadowRoot {
+  host.lang = 'fr'
   const root = host.attachShadow({ mode: 'open' })
   root.adoptedStyleSheets = [toolboxSheet]
   return root

@@ -9,6 +9,7 @@ import {
   stopCollectionLoad,
 } from './collection'
 import { collectionCompatible, onCompatibilityChange } from './compatibility'
+import { errorMessage } from './presentation'
 import { requestWrite } from './requests'
 import {
   buildSelection,
@@ -138,7 +139,7 @@ export function parseCommitments(
     !Array.isArray(market.selling) ||
     !Array.isArray(trades.trades)
   )
-    throw new Error('Sale / trade protections unavailable')
+    throw new Error('Protections de vente / échange indisponibles')
   const result: Commitments = {
     catalogueIds: new Set(),
     copyIds: new Set(),
@@ -147,7 +148,7 @@ export function parseCommitments(
   }
   for (const auction of market.selling) {
     if (!auction || typeof auction !== 'object')
-      throw new Error('Invalid sale protection')
+      throw new Error('Protection de vente invalide')
     const copyId = nonemptyString(auction.user_card_id)
     const id =
       nonemptyString(auction.card_id) ?? nonemptyString(auction.card?.id)
@@ -155,26 +156,27 @@ export function parseCommitments(
       result.copyIds.add(copyId)
       result.saleCopyIds?.add(copyId)
     } else if (id) result.catalogueIds.add(id)
-    else throw new Error('Sale identity unavailable')
+    else throw new Error('Identité de vente indisponible')
   }
   // The native collection also protects trades at catalogue level, across copies.
   for (const trade of trades.trades) {
     if (!trade || typeof trade !== 'object' || typeof trade.status !== 'string')
-      throw new Error('Invalid trade protection')
+      throw new Error('Protection d’échange invalide')
     if (trade.status !== 'pending') continue
     if (trade.initiator_id !== owner && trade.recipient_id !== owner)
-      throw new Error('Trade account changed')
-    if (!Array.isArray(trade.items)) throw new Error('Trade items unavailable')
+      throw new Error('Compte d’échange modifié')
+    if (!Array.isArray(trade.items))
+      throw new Error('Cartes de l’échange indisponibles')
     for (const item of trade.items) {
       if (
         !item ||
         typeof item !== 'object' ||
         typeof item.offered_by !== 'string'
       )
-        throw new Error('Trade identity unavailable')
+        throw new Error('Identité d’échange indisponible')
       if (item.offered_by !== owner) continue
       const id = nonemptyString(item.card_id)
-      if (!id) throw new Error('Trade identity unavailable')
+      if (!id) throw new Error('Identité d’échange indisponible')
       result.catalogueIds.add(id)
       const copyId = nonemptyString(item.user_card_id)
       if (copyId) result.tradeCopyIds?.add(copyId)
@@ -206,19 +208,18 @@ export async function checkSelection(): Promise<void> {
     await loadCollection(true)
     if (current !== epoch || request.signal.aborted) return
     if (getCollectionState().status !== 'complete')
-      throw new Error('Load the complete collection first')
+      throw new Error('Chargez d’abord la collection complète')
     const fresh = await readCommitments(owner, request.signal)
     if (current !== epoch || getAccountId() !== owner || request.signal.aborted)
       return
     commitments = fresh
     checkedAt = Date.now()
     if (getCollectionState().status !== 'complete')
-      throw new Error('Collection changed; check again')
+      throw new Error('Collection modifiée ; vérifiez à nouveau')
   } catch (cause) {
     if (current === epoch) {
       checkedAt = 0
-      state.error =
-        cause instanceof Error ? cause.message : 'Protections unavailable'
+      state.error = errorMessage(cause, 'Protections indisponibles')
     }
   } finally {
     if (current === epoch) {
@@ -271,7 +272,7 @@ function persistRun(owner: string, run: ActionState): boolean {
             ? {
                 ...result,
                 status: 'unknown',
-                error: 'Interrupted request; verify the collection',
+                error: 'Requête interrompue ; vérifiez la collection',
               }
             : result,
         ),
@@ -351,7 +352,7 @@ export function parseDiscardResult(json: unknown): {
   error?: string
 } {
   if (!json || typeof json !== 'object')
-    return { status: 'unknown', error: 'Result unavailable' }
+    return { status: 'unknown', error: 'Résultat indisponible' }
   const value = json as Record<string, unknown>
   if (
     value.discarded_count === 1 &&
@@ -369,11 +370,11 @@ export function parseDiscardResult(json: unknown): {
       typeof entry === 'string'
         ? entry
         : (nonemptyString(entry?.error) ?? nonemptyString(entry?.reason))
-    return { status: 'failed', error: message ?? 'Rejected by the game' }
+    return { status: 'failed', error: message ?? 'Refusé par le jeu' }
   }
   return {
     status: 'unknown',
-    error: 'Unexpected result; check the collection before another action',
+    error: 'Résultat inattendu ; vérifiez la collection avant une autre action',
   }
 }
 
@@ -391,7 +392,8 @@ export async function executeDiscard(): Promise<void> {
     return
   }
   if (!navigator.locks) {
-    state.error = 'Group actions need browser locking support'
+    state.error =
+      'Les actions groupées nécessitent le verrouillage entre onglets'
     notify()
     return
   }
@@ -400,7 +402,7 @@ export async function executeDiscard(): Promise<void> {
     { ifAvailable: true },
     async lock => {
       if (!lock) {
-        state.error = 'An action is already running in another tab'
+        state.error = 'Une action est déjà en cours dans un autre onglet'
         notify()
         return
       }
@@ -433,14 +435,14 @@ export async function executeDiscard(): Promise<void> {
           selectionFingerprint(getCollectionState().cards) !==
             approved.collection
         )
-          throw new Error('Collection changed; prepare a new preview')
+          throw new Error('Collection modifiée ; préparez un nouvel aperçu')
         const fresh = await readCommitments(approved.accountId, request.signal)
         if (current !== epoch || run.stop) return
         if (
           commitmentsKey(fresh) !== approved.commitments ||
           rulesKey() !== approved.rules
         )
-          throw new Error('Protections changed; prepare a new preview')
+          throw new Error('Protections modifiées ; préparez un nouvel aperçu')
         commitments = fresh
         checkedAt = Date.now()
         run.phase = 'running'
@@ -463,7 +465,8 @@ export async function executeDiscard(): Promise<void> {
           run.results.push(result)
           if (!persistRun(approved.accountId, run)) {
             run.results.pop()
-            run.error = 'Action stopped: result could not be saved locally'
+            run.error =
+              'Action arrêtée : impossible d’enregistrer le résultat localement'
             run.stop = true
             break
           }
@@ -485,19 +488,20 @@ export async function executeDiscard(): Promise<void> {
               ? parseDiscardResult(json)
               : {
                   status: 'unknown' as const,
-                  error: `HTTP ${response.status}; verify the collection`,
+                  error: `HTTP ${response.status} ; vérifiez la collection`,
                 }
             Object.assign(result, outcome)
             if (outcome.status === 'discarded') delete result.error
             if (outcome.status === 'unknown') run.stop = true
           } catch {
             result.status = 'unknown'
-            result.error = 'Result uncertain; verify the collection'
+            result.error = 'Résultat incertain ; vérifiez la collection'
             run.stop = true
           } finally {
             clearTimeout(timer)
             if (!persistRun(approved.accountId, run)) {
-              run.error = 'Action stopped: result could not be saved locally'
+              run.error =
+                'Action arrêtée : impossible d’enregistrer le résultat localement'
               run.stop = true
             }
             if (current === epoch) notify()
@@ -505,8 +509,7 @@ export async function executeDiscard(): Promise<void> {
           if (!run.stop) await new Promise(resolve => setTimeout(resolve, 350))
         }
       } catch (cause) {
-        run.error =
-          cause instanceof Error ? cause.message : 'Action unavailable'
+        run.error = errorMessage(cause, 'Action indisponible')
       } finally {
         if (current === epoch) {
           checking = null

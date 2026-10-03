@@ -1,5 +1,6 @@
 import { getAccountId, onAccountChange } from './account'
 import { invalidateCollection } from './collection'
+import { errorMessage } from './presentation'
 import { requestWrite, serverPauseMs } from './requests'
 import { captureRunCards, type RunCard, saveRunSummary } from './run-summary'
 import { recordPack } from './stats'
@@ -38,7 +39,7 @@ let prefs = readPrefs()
 let autoTimer: ReturnType<typeof setTimeout> | null = null
 let runController: AbortController | null = null
 let runMode: 'manual' | 'auto' | null = null
-let statusText = 'Disabled'
+let statusText = 'Désactivé'
 let openedThisCycle = 0
 let confirmationTimer: ReturnType<typeof setTimeout> | null = null
 let scheduleClaimPending = false
@@ -128,7 +129,8 @@ export function getStatus(): string {
   return statusText
 }
 
-const VERIFICATION_STATUS = 'Verification required · use the game’s Open button'
+const VERIFICATION_STATUS =
+  'Vérification requise · utilisez le bouton d’ouverture du jeu'
 class HumanVerificationError extends Error {}
 
 export function requirePackVerification(): void {
@@ -151,7 +153,7 @@ export function observeNativePack(): void {
   prefs.verificationRequired = false
   prefs.nextAt = prefs.enabled ? Date.now() + randomDelay() : 0
   writePrefs()
-  setStatus('Verification complete')
+  setStatus('Vérification terminée')
   updateOpenAllButton()
   if (prefs.enabled) scheduleAuto()
 }
@@ -165,8 +167,8 @@ export function setAutoEnabled(enabled: boolean): void {
   if (!enabled) {
     if (autoTimer) clearTimeout(autoTimer)
     autoTimer = null
-    if (runMode === 'auto') runController?.abort(new Error('Stopped by user'))
-    setStatus(prefs.verificationRequired ? VERIFICATION_STATUS : 'Disabled')
+    if (runMode === 'auto') runController?.abort(new Error('Arrêt demandé'))
+    setStatus(prefs.verificationRequired ? VERIFICATION_STATUS : 'Désactivé')
   } else scheduleAuto()
 }
 
@@ -204,24 +206,24 @@ export function syncPrefsFromStorage(): void {
     if (autoTimer) clearTimeout(autoTimer)
     autoTimer = null
     if (runMode === 'auto')
-      runController?.abort(new Error('Stopped from another tab'))
-    setStatus('Disabled')
+      runController?.abort(new Error('Arrêt depuis un autre onglet'))
+    setStatus('Désactivé')
   } else scheduleAuto()
 }
 
 export function leavePacksPage(): void {
   clearOpenAllConfirmation()
   if (runMode === 'manual')
-    runController?.abort(new Error('Left the Packs page'))
+    runController?.abort(new Error('Page des paquets quittée'))
 }
 
 export function onOpenAllClick(): void {
   if (runMode === 'manual') {
-    runController?.abort(new Error('Stopped by user'))
+    runController?.abort(new Error('Arrêt demandé'))
     return
   }
   if (!getAccountId()) {
-    setStatus('Waiting for your WikiMasters account…')
+    setStatus('En attente de votre compte WikiMasters…')
     return
   }
   if (confirmationTimer) {
@@ -261,7 +263,7 @@ function setStatus(value: string): void {
     ?.shadowRoot?.querySelector<HTMLElement>('[data-wm-toolbox-status]')
   if (status) {
     status.textContent = statusText
-    status.hidden = statusText === 'Disabled'
+    status.hidden = statusText === 'Désactivé'
   }
 }
 
@@ -276,14 +278,14 @@ function schedulePassiveRetry(): void {
 async function claimMissingSchedule(): Promise<void> {
   if (scheduleClaimPending) return
   if (!navigator.locks) {
-    setStatus('Cross-tab lock unavailable')
+    setStatus('Verrou entre onglets indisponible')
     return
   }
   scheduleClaimPending = true
   try {
     await navigator.locks.request(OPEN_LOCK, { ifAvailable: true }, lock => {
       if (!lock) {
-        setStatus('Another tab is opening packs')
+        setStatus('Un autre onglet ouvre des paquets')
         schedulePassiveRetry()
         return
       }
@@ -316,8 +318,8 @@ export function scheduleAuto(): void {
   const remaining = Math.max(1_000, prefs.nextAt - Date.now())
   setStatus(
     prefs.nextAt <= Date.now()
-      ? 'Scheduled opening is due…'
-      : `Next opening around ${formatLocalTime(prefs.nextAt)}`,
+      ? 'Ouverture programmée en attente…'
+      : `Prochaine ouverture vers ${formatLocalTime(prefs.nextAt)}`,
   )
   autoTimer = setTimeout(() => {
     autoTimer = null
@@ -352,7 +354,7 @@ export async function openOnePack(signal: AbortSignal): Promise<PackResponse> {
     const response = result.response
     const json = result.json as PackResponse
     if (!json || typeof json !== 'object')
-      throw new Error('Pack response changed')
+      throw new Error('Réponse du paquet modifiée')
     if (json.human_verification_required === true) {
       requirePackVerification()
       throw new HumanVerificationError(VERIFICATION_STATUS)
@@ -366,21 +368,21 @@ export async function openOnePack(signal: AbortSignal): Promise<PackResponse> {
         waitMs > 120_000 ||
         attempt === 2
       ) {
-        throw new Error('Temporary rate limit; try again later')
+        throw new Error('Limite temporaire de requêtes ; réessayez plus tard')
       }
-      setStatus('The game is busy. Retrying shortly…')
+      setStatus('Le jeu est occupé. Nouvelle tentative bientôt…')
       await wait(waitMs, signal)
       continue
     }
     if (!response.ok)
       throw new Error(
         json.rate_limit_daily
-          ? 'Daily pack limit reached'
-          : `The game returned HTTP ${response.status}`,
+          ? 'Limite quotidienne de paquets atteinte'
+          : `Le jeu a renvoyé HTTP ${response.status}`,
       )
     return json
   }
-  throw new Error('Opening stopped by the game rate limit')
+  throw new Error('Ouverture arrêtée par la limite de requêtes du jeu')
 }
 
 export async function openAvailablePacks(
@@ -396,18 +398,18 @@ export async function openAvailablePacks(
   for (let index = 0; index < limit; index += 1) {
     if (signal.aborted) throw signal.reason
     if (expectedAccountId && getAccountId() !== expectedAccountId)
-      throw new Error('WikiMasters account changed during the run')
-    setStatus(`Opening pack ${index + 1}…`)
+      throw new Error('Compte WikiMasters modifié pendant l’ouverture')
+    setStatus(`Ouverture du paquet ${index + 1}…`)
     const response = await openOnePack(signal)
     if (
       signal.aborted ||
       (expectedAccountId && getAccountId() !== expectedAccountId)
     )
-      throw new Error('WikiMasters account changed during the run')
+      throw new Error('Compte WikiMasters modifié pendant l’ouverture')
     if (!Array.isArray(response.cards) || response.cards.length === 0) {
       if (response.packs_remaining === 0)
         return { opened: openedThisCycle, remaining: 0, reason: 'empty' }
-      throw new Error('The game returned a pack without cards')
+      throw new Error('Le jeu a renvoyé un paquet sans cartes')
     }
     openedThisCycle += 1
     invalidateCollection()
@@ -441,7 +443,7 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
     return
   clearOpenAllConfirmation()
   if (!navigator.locks) {
-    setStatus('Cross-tab lock unavailable')
+    setStatus('Verrou entre onglets indisponible')
     return
   }
   await navigator.locks.request(
@@ -449,7 +451,7 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
     { ifAvailable: true },
     async lock => {
       if (!lock) {
-        setStatus('Another tab is opening packs')
+        setStatus('Un autre onglet ouvre des paquets')
         if (mode === 'auto') schedulePassiveRetry()
         return
       }
@@ -492,13 +494,13 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
         detail =
           result.reason === 'empty'
             ? result.opened === 0
-              ? 'No packs were available.'
-              : 'No packs remain.'
+              ? 'Aucun paquet disponible.'
+              : 'Il ne reste aucun paquet.'
             : result.reason === 'limit'
-              ? `Reached your ${limit}-pack limit.`
-              : `Stopped at the ${MAX_PACKS_PER_CYCLE}-pack safety limit.`
+              ? `Limite atteinte : ${limit} paquets.`
+              : `Arrêt à la limite de sécurité de ${MAX_PACKS_PER_CYCLE} paquets.`
         setStatus(
-          `${openedThisCycle} pack${openedThisCycle === 1 ? '' : 's'} opened`,
+          `${openedThisCycle} paquet${openedThisCycle === 1 ? '' : 's'} ouvert${openedThisCycle === 1 ? '' : 's'}`,
         )
       } catch (error) {
         detail =
@@ -507,10 +509,10 @@ export async function runPacks(mode: 'manual' | 'auto'): Promise<void> {
             : runController.signal.aborted
               ? runController.signal.reason instanceof Error
                 ? `${runController.signal.reason.message}.`
-                : 'Opening stopped.'
+                : 'Ouverture arrêtée.'
               : error instanceof Error
-                ? `Failed: ${error.message}.`
-                : 'Failed: the game could not open the next pack.'
+                ? `Échec : ${errorMessage(error, 'Ouverture indisponible')}.`
+                : 'Échec : le jeu n’a pas pu ouvrir le paquet suivant.'
         if (getAccountId() === accountId) setStatus(detail)
       } finally {
         const shouldRefresh =
@@ -569,18 +571,18 @@ export function updateOpenAllButton(): void {
     !getAccountId() || runMode === 'auto' || prefs.verificationRequired
   button.classList.toggle('wm-open-all-confirm', confirmationTimer !== null)
   button.textContent = prefs.verificationRequired
-    ? 'Verify with the game’s Open button'
+    ? 'Vérifiez avec le bouton d’ouverture du jeu'
     : runMode === 'manual'
-      ? `Stop opening (${openedThisCycle})`
+      ? `Arrêter l’ouverture (${openedThisCycle})`
       : runMode === 'auto'
-        ? 'Opening automatically…'
+        ? 'Ouverture automatique…'
         : confirmationTimer
           ? manualLimit === null
-            ? 'Confirm opening all packs'
-            : `Confirm opening up to ${manualLimit} ${manualLimit === 1 ? 'pack' : 'packs'}`
+            ? 'Confirmer l’ouverture de tous les paquets'
+            : `Confirmer l’ouverture : jusqu’à ${manualLimit} ${manualLimit === 1 ? 'paquet' : 'paquets'}`
           : manualLimit === null
-            ? 'Open all available packs'
-            : `Open up to ${manualLimit} ${manualLimit === 1 ? 'pack' : 'packs'}`
+            ? 'Ouvrir tous les paquets disponibles'
+            : `Ouvrir jusqu’à ${manualLimit} ${manualLimit === 1 ? 'paquet' : 'paquets'}`
 }
 
 export function clearOpenAllConfirmation(): void {
@@ -600,11 +602,11 @@ function updateProgress(opened: number, total: number | null): void {
   if (!meter || !label) return
   if (total === null) {
     meter.removeAttribute('value')
-    label.textContent = 'Checking available packs…'
+    label.textContent = 'Vérification des paquets disponibles…'
   } else {
     meter.max = Math.max(1, total)
     meter.value = opened
-    label.textContent = `${opened} of ${total} packs opened`
+    label.textContent = `${opened} / ${total} paquets ouverts`
   }
 }
 
@@ -619,11 +621,11 @@ onAccountChange(() => {
   if (autoTimer) clearTimeout(autoTimer)
   autoTimer = null
   clearOpenAllConfirmation()
-  runController?.abort(new Error('WikiMasters account changed'))
+  runController?.abort(new Error('Compte WikiMasters modifié'))
   prefs = readPrefs()
   manualLimit = readManualLimit()
   setStatus(
-    getAccountId() ? 'Disabled' : 'Waiting for your WikiMasters account…',
+    getAccountId() ? 'Désactivé' : 'En attente de votre compte WikiMasters…',
   )
   updateOpenAllButton()
   if (prefs.enabled && !runController) scheduleAuto()

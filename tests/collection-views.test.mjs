@@ -183,8 +183,8 @@ test('query-based selections continue to obey favorites, commitments and keep N'
   commitments.copyIds.add('copy-3')
   const plan = c.buildSelection(cards, rules, commitments)
   assert.deepEqual(ids(plan.cards), ['copy-0', 'copy-1'])
-  assert.equal(plan.blocked.get('copy-2'), 'Favorite')
-  assert.equal(plan.blocked.get('copy-3'), 'Sale / trade')
+  assert.equal(plan.blocked.get('copy-2'), 'Favori')
+  assert.equal(plan.blocked.get('copy-3'), 'Vente / échange')
   assert.equal(plan.groups[0].after, 2)
 })
 
@@ -326,7 +326,7 @@ test('view storage is bounded and storage failures preserve the last saved setti
   }
   c.setCompact(true)
   assert.equal(c.getViewPreferences().compact, false)
-  assert.equal(c.getViewPreferences().error, 'Not saved locally')
+  assert.equal(c.getViewPreferences().error, 'Non enregistré localement')
   assert.equal(
     c.saveView('View 0', { ...c.defaultCollectionQuery(), search: 'new' }, 0),
     false,

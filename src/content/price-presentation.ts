@@ -11,7 +11,7 @@ export function formatPriceAge(fetchedAt: number, now = Date.now()): string {
 }
 
 function priceCheckDate(fetchedAt: number): string {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat('fr-FR', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(fetchedAt))
@@ -33,7 +33,7 @@ export function presentPrice(
       status: 'loading',
       value: '…',
       age: '',
-      hint: 'Loading average sale price',
+      hint: 'Chargement du prix moyen de vente',
     }
   const checked = priceCheckDate(quote.fetchedAt)
   if (quote.status === 'unavailable')
@@ -42,40 +42,40 @@ export function presentPrice(
       value: '!',
       age: '',
       hint: quote.reason
-        ? `Price loading paused · ${quote.reason}`
-        : `Price request failed · last attempt ${checked} · retry in one minute`,
+        ? `Chargement des prix suspendu · ${quote.reason}`
+        : `Échec du chargement du prix · dernière tentative le ${checked} · réessayez dans une minute`,
     }
   if (quote.status === 'not-found')
     return {
       status: quote.status,
       value: '—',
       age: '',
-      hint: `No market price found · last attempt ${checked} · retry in one minute`,
+      hint: `Aucun prix de marché trouvé · dernière tentative le ${checked} · réessayez dans une minute`,
     }
   if (quote.status === 'unknown-rarity')
     return {
       status: quote.status,
       value: '—',
       age: formatPriceAge(quote.fetchedAt),
-      hint: 'Card rarity unknown · no price inferred from another rarity',
+      hint: 'Rareté de la carte inconnue · aucun prix déduit d’une autre rareté',
     }
   const age = formatPriceAge(quote.fetchedAt)
   const decisionOld = context === 'decision' && priceTooOld(quote, context)
   const decisionHint =
     context === 'decision'
-      ? ` · sale/trade freshness: 15 min${decisionOld ? ' · refresh before deciding' : ''}`
+      ? ` · fraîcheur vente / échange : 15 min${decisionOld ? ' · actualisez avant de décider' : ''}`
       : ''
   if (quote.status === 'no-sales')
     return {
       status: quote.status,
       value: quote.failed ? '!' : '—',
       age,
-      hint: `No sales data for this rarity · checked ${checked}${quote.stale ? ' · stale observation' : ''}${decisionHint}${quote.failed ? ` · refresh failed · last attempt ${priceCheckDate(quote.lastAttempt ?? quote.fetchedAt)}` : ''}`,
+      hint: `Aucune donnée de vente pour cette rareté · vérifié le ${checked}${quote.stale ? ' · observation ancienne' : ''}${decisionHint}${quote.failed ? ` · actualisation échouée · dernière tentative le ${priceCheckDate(quote.lastAttempt ?? quote.fetchedAt)}` : ''}`,
     }
   return {
     status: quote.status,
-    value: `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(quote.average)} W${quote.failed ? ' !' : decisionOld ? ' ↻' : ''}`,
+    value: `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(quote.average)} W${quote.failed ? ' !' : decisionOld ? ' ↻' : ''}`,
     age,
-    hint: `Average sale price for this rarity · checked ${checked} · source period not specified by WikiMasters · average only · volume and dispersion unavailable${quote.stale ? ' · stale price' : ''}${decisionHint}${quote.failed ? ` · refresh failed · last attempt ${priceCheckDate(quote.lastAttempt ?? quote.fetchedAt)}` : ''}`,
+    hint: `Prix moyen de vente pour cette rareté · vérifié le ${checked} · période de calcul non précisée par WikiMasters · moyenne seule · volume et dispersion indisponibles${quote.stale ? ' · prix ancien' : ''}${decisionHint}${quote.failed ? ` · actualisation échouée · dernière tentative le ${priceCheckDate(quote.lastAttempt ?? quote.fetchedAt)}` : ''}`,
   }
 }

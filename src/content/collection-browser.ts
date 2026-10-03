@@ -24,6 +24,7 @@ import {
   saveView,
   setCompact,
 } from './collection-views'
+import { statusLabel } from './presentation'
 import { presentPrice } from './price-presentation'
 import { readPriceQuote } from './price-store'
 import { createRarityBadge } from './rarity'
@@ -89,17 +90,17 @@ export function createCompactControls(): HTMLElement {
     setCompact(input.checked)
     renderCompactLayout()
   })
-  return label('Compact cards', input)
+  return label('Cartes compactes', input)
 }
 export function createCollectionBrowser(): HTMLElement {
   const section = el('details', '', 'wm-collection-browser')
   section.dataset.wmCollectionBrowser = '1'
-  section.append(el('summary', 'Filters / views / duplicates'))
+  section.append(el('summary', 'Filtres / vues / doublons'))
   const body = el('div', '', 'wm-browser-body')
   const filters = el('div', '', 'wm-browser-filters')
   for (const [key, text] of [
-    ['search', 'Title'],
-    ['category', 'Category'],
+    ['search', 'Titre'],
+    ['category', 'Catégorie'],
   ] as const) {
     const input = el('input')
     input.type = 'search'
@@ -126,16 +127,16 @@ export function createCollectionBrowser(): HTMLElement {
     rarities.append(item)
   }
   for (const [key, text] of [
-    ['favorite', 'Favorite'],
-    ['duplicate', 'Duplicate variant'],
-    ['knownPrice', 'Known price'],
-    ['missingImage', 'Without image'],
+    ['favorite', 'Favori'],
+    ['duplicate', 'Variante en double'],
+    ['knownPrice', 'Prix connu'],
+    ['missingImage', 'Sans image'],
   ] as const) {
     const input = select(
       [
-        ['any', 'Any'],
-        ['yes', 'Yes'],
-        ['no', 'No'],
+        ['any', 'Tous'],
+        ['yes', 'Oui'],
+        ['no', 'Non'],
       ],
       value => {
         query[key] = value as TriState
@@ -147,19 +148,19 @@ export function createCollectionBrowser(): HTMLElement {
   }
   const tags = select(
     [
-      ['', 'Any'],
-      ['@tagged', 'Tagged'],
-      ['@untagged', 'Untagged'],
+      ['', 'Tous'],
+      ['@tagged', 'Avec étiquette'],
+      ['@untagged', 'Sans étiquette'],
     ],
     value => {
       query.tag = value
     },
   )
   tags.dataset.wmQuery = 'tag'
-  filters.append(label('Tag', tags))
+  filters.append(label('Étiquette', tags))
   for (const [key, text] of [
-    ['priceMin', 'Price min · W'],
-    ['priceMax', 'Price max · W'],
+    ['priceMin', 'Prix min · W'],
+    ['priceMax', 'Prix max · W'],
     ['atkMin', 'ATK min'],
     ['atkMax', 'ATK max'],
     ['defMin', 'DEF min'],
@@ -184,14 +185,14 @@ export function createCollectionBrowser(): HTMLElement {
     SORTS.map(key => [
       key,
       {
-        title: 'Title',
-        price: 'Price',
-        quantity: 'Quantity',
-        rarity: 'Rarity',
+        title: 'Titre',
+        price: 'Prix',
+        quantity: 'Quantité',
+        rarity: 'Rareté',
         atk: 'ATK',
         def: 'DEF',
         ratio: 'ATK / DEF',
-        obtained: 'Acquired',
+        obtained: 'Acquisition',
       }[key],
     ]),
     value => {
@@ -202,8 +203,8 @@ export function createCollectionBrowser(): HTMLElement {
   sort.value = query.sort
   const direction = select(
     [
-      ['asc', 'Ascending'],
-      ['desc', 'Descending'],
+      ['asc', 'Croissant'],
+      ['desc', 'Décroissant'],
     ],
     value => {
       query.descending = value === 'desc'
@@ -220,12 +221,12 @@ export function createCollectionBrowser(): HTMLElement {
   })
   const controls = el('div', '', 'wm-browser-filters')
   controls.append(
-    label('Sort', sort),
-    label('Order', direction),
-    label('Group duplicates', group),
+    label('Tri', sort),
+    label('Ordre', direction),
+    label('Regrouper les doublons', group),
     createCompactControls(),
   )
-  const saved = select([['', 'Personal views']], value => {
+  const saved = select([['', 'Vues personnelles']], value => {
     selectedView = value
     const view = getViewPreferences().views.find(v => v.name === value)
     if (view) {
@@ -237,13 +238,13 @@ export function createCollectionBrowser(): HTMLElement {
   const name = el('input')
   name.maxLength = 60
   name.required = true
-  name.placeholder = 'View name'
-  name.setAttribute('aria-label', 'View name')
+  name.placeholder = 'Nom de la vue'
+  name.setAttribute('aria-label', 'Nom de la vue')
   const viewActions = el('div', '', 'wm-collection-actions')
   viewActions.append(
     saved,
     name,
-    button('Save view', () => {
+    button('Enregistrer la vue', () => {
       if (!name.reportValidity()) return
       const nameValue = name.value.trim()
       const state = getCollectionState()
@@ -259,7 +260,7 @@ export function createCollectionBrowser(): HTMLElement {
         renderCollectionBrowser()
       }
     }),
-    button('Delete view', () => {
+    button('Supprimer la vue', () => {
       deleteView(selectedView)
       selectedView = ''
       renderCollectionBrowser()
@@ -269,7 +270,7 @@ export function createCollectionBrowser(): HTMLElement {
   status.dataset.wmBrowserStatus = '1'
   status.setAttribute('role', 'status')
   const actions = el('div', '', 'wm-collection-actions')
-  const selectMatches = button('Select matches', () => {
+  const selectMatches = button('Sélectionner les résultats', () => {
     if (!getSelectionState().ready) return
     const indexed = getCollectionState().cards
     const matches = queryCollectionView(indexed, query, readPriceQuote, grouped)
@@ -281,12 +282,12 @@ export function createCollectionBrowser(): HTMLElement {
     })
   })
   selectMatches.dataset.wmSelectMatches = '1'
-  const check = button('Check protections', () => {
+  const check = button('Vérifier les protections', () => {
     void checkSelection()
   })
   check.dataset.wmBrowserCheck = '1'
   actions.append(
-    button('Reset filters', () => {
+    button('Réinitialiser les filtres', () => {
       query = defaultCollectionQuery()
       selectedView = ''
       syncInputs(section)
@@ -297,11 +298,11 @@ export function createCollectionBrowser(): HTMLElement {
   )
   const note = el(
     'p',
-    'Local index · cached prices · protections kept. Groups show all copies; Select matches adds only filtered copies.',
+    'Index local · prix en cache · protections conservées. Les groupes montrent toutes les copies ; « Sélectionner les résultats » ajoute uniquement les copies filtrées.',
     'wm-note',
   )
   note.title =
-    'No extra price requests. Unknown values stay last when sorting; shiny prices are unknown. Committed means sale/trade at catalogue level; the exact copy is unknown.'
+    'Aucune requête de prix supplémentaire. Les valeurs inconnues restent en fin de tri ; les prix des brillantes sont inconnus. Une carte engagée au niveau du catalogue est en vente / échange, sans identification de la copie exacte.'
   const list = el('div', '', 'wm-browser-results')
   list.dataset.wmBrowserResults = '1'
   const pagination = el('div', '', 'wm-selection-pagination')
@@ -343,10 +344,13 @@ function copyRow(
   const check = el('input')
   check.type = 'checkbox'
   check.checked = selected.has(card.copyId)
-  check.setAttribute('aria-label', `Select ${card.title} · ${card.copyId}`)
+  check.setAttribute(
+    'aria-label',
+    `Sélectionner ${card.title} · ${card.copyId}`,
+  )
   const blocked = state.plan.blocked.get(card.copyId)
   check.disabled = busy || !state.ready || !!blocked
-  check.title = blocked ?? 'Select this identified copy'
+  check.title = blocked ?? 'Sélectionner cette copie identifiée'
   check.dataset.wmBrowserCopy = card.copyId
   check.addEventListener('change', () => toggleCopy(card.copyId, check.checked))
   const text = el('div')
@@ -357,18 +361,18 @@ function copyRow(
   )
   heading.prepend(createRarityBadge(card.rarity), document.createTextNode(' '))
   const price = card.shiny
-    ? { value: '—', age: '', hint: 'Shiny price unavailable' }
+    ? { value: '—', age: '', hint: 'Prix des brillantes indisponible' }
     : presentPrice(readPriceQuote(card.id, card.rarity))
   const availability = copyAvailability(card, state.commitments, state.ready)
   const meta = el(
     'small',
-    `${price.value}${price.age ? ` · ${price.age}` : ''} · ATK ${card.atk ?? '—'} / DEF ${card.def ?? '—'} · ${availability}${blocked ? ` · ${blocked}` : ''}`,
+    `${price.value}${price.age ? ` · ${price.age}` : ''} · ATK ${card.atk ?? '—'} / DEF ${card.def ?? '—'} · ${statusLabel(availability)}${blocked ? ` · ${blocked}` : ''}`,
   )
   meta.title = price.hint
   text.append(heading, meta)
-  const inspect = button('Inspect', () => inspectCopy(card.copyId))
+  const inspect = button('Inspecter', () => inspectCopy(card.copyId))
   inspect.disabled = busy || getCollectionState().status !== 'complete'
-  inspect.title = `Open exact copy ${card.copyId} in the game`
+  inspect.title = `Ouvrir la copie exacte ${card.copyId} dans le jeu`
   row.title = `${card.copyId}${card.obtainedAt ? ` · ${card.obtainedAt}` : ''}${card.category ? ` · ${card.category}` : ''}`
   row.append(check, text, inspect)
   return row
@@ -395,7 +399,7 @@ export function renderCollectionBrowser(): void {
   page = Math.min(page, total - 1)
   const status = section.querySelector<HTMLElement>('[data-wm-browser-status]')
   if (status)
-    status.textContent = `${cards.length} / ${state.cards.length} matches · ${state.status === 'complete' ? 'full index' : state.status === 'loading' ? '… partial index' : 'partial / stale index'}${grouped ? ` · ${groups.length} duplicate variants` : ''}${state.updatedAt ? ` · synced ${new Date(state.updatedAt).toLocaleString()}` : ''}${prefs.error ? ` · ${prefs.error}` : ''}`
+    status.textContent = `${cards.length} / ${state.cards.length} résultats · ${state.status === 'complete' ? 'index complet' : state.status === 'loading' ? '… index partiel' : 'index partiel / ancien'}${grouped ? ` · ${groups.length} variantes en double` : ''}${state.updatedAt ? ` · synchronisé le ${new Date(state.updatedAt).toLocaleString('fr-FR')}` : ''}${prefs.error ? ` · ${prefs.error}` : ''}`
   for (const item of section.querySelectorAll<HTMLButtonElement>(
     '[data-wm-filter-rarity]',
   ))
@@ -421,9 +425,9 @@ export function renderCollectionBrowser(): void {
       tags.dataset.signature = signature
       tags.replaceChildren(
         ...[
-          ['', 'Any'],
-          ['@tagged', 'Tagged'],
-          ['@untagged', 'Untagged'],
+          ['', 'Tous'],
+          ['@tagged', 'Avec étiquette'],
+          ['@untagged', 'Sans étiquette'],
           ...[...names].sort((a, b) => a[1].localeCompare(b[1])),
         ].map(([id, name]) => {
           const item = el('option', name)
@@ -446,10 +450,10 @@ export function renderCollectionBrowser(): void {
       saved.dataset.signature = signature
       saved.replaceChildren(
         ...[
-          ['', 'Personal views'],
+          ['', 'Vues personnelles'],
           ...prefs.views.map(v => [
             v.name,
-            `${v.name} · ${v.syncedAt ? new Date(v.syncedAt).toLocaleString() : 'not synced'}`,
+            `${v.name} · ${v.syncedAt ? new Date(v.syncedAt).toLocaleString('fr-FR') : 'non synchronisé'}`,
           ]),
         ].map(([value, text]) => {
           const item = el('option', text)
@@ -508,7 +512,7 @@ export function renderCollectionBrowser(): void {
           details.dataset.wmVariant = entry
           const heading = el(
             'summary',
-            `${copies[0].title} · ${copies.length} copies · ${[...counts].map(([key, n]) => `${n} ${key}`).join(' / ')}`,
+            `${copies[0].title} · ${copies.length} copies · ${[...counts].map(([key, n]) => `${n} ${statusLabel(key)}`).join(' / ')}`,
           )
           heading.prepend(
             createRarityBadge(copies[0].rarity),
@@ -528,7 +532,7 @@ export function renderCollectionBrowser(): void {
           list.append(details)
         }
       }
-      if (!visible.length) list.append(el('p', 'No matches', 'wm-note'))
+      if (!visible.length) list.append(el('p', 'Aucun résultat', 'wm-note'))
       if (focused)
         [...list.querySelectorAll<HTMLInputElement>('[data-wm-browser-copy]')]
           .find(e => e.dataset.wmBrowserCopy === focused)
@@ -548,13 +552,13 @@ export function renderCollectionBrowser(): void {
       page--
       renderCollectionBrowser()
     })
-    previous.setAttribute('aria-label', 'Previous results')
+    previous.setAttribute('aria-label', 'Résultats précédents')
     previous.disabled = !page
     const next = button('→', () => {
       page++
       renderCollectionBrowser()
     })
-    next.setAttribute('aria-label', 'Next results')
+    next.setAttribute('aria-label', 'Résultats suivants')
     next.disabled = page + 1 === total
     pagination.replaceChildren(
       previous,

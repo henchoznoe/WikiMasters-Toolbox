@@ -1,5 +1,6 @@
 import { getCollectionState } from './collection'
 import { getSelectionState } from './collection-actions'
+import { statusLabel } from './presentation'
 import { currentPriceContext } from './price-context'
 import {
   createPriceInsights,
@@ -21,17 +22,17 @@ export function createPriceControls(): HTMLElement {
   const details = document.createElement('details')
   details.className = 'wm-price-controls'
   const summary = document.createElement('summary')
-  summary.textContent = 'Prices'
+  summary.textContent = 'Prix'
   summary.dataset.priceControlsSummary = '1'
   const controls = document.createElement('div')
   controls.className = 'wm-price-controls-body'
   const scope = document.createElement('select')
-  scope.setAttribute('aria-label', 'Price refresh scope')
+  scope.setAttribute('aria-label', 'Périmètre d’actualisation des prix')
   scope.dataset.priceScope = '1'
   for (const [value, label] of [
-    ['page', 'Cards on this page'],
-    ['collection', 'Loaded collection'],
-    ['selection', 'Selection'],
+    ['page', 'Cartes de cette page'],
+    ['collection', 'Collection chargée'],
+    ['selection', 'Sélection'],
   ]) {
     const option = document.createElement('option')
     option.value = value
@@ -46,7 +47,7 @@ export function createPriceControls(): HTMLElement {
     button.className = 'wm-price-rarity'
     button.dataset.priceFilter = rarity
     button.setAttribute('aria-pressed', 'true')
-    button.setAttribute('aria-label', `Include ${rarity}`)
+    button.setAttribute('aria-label', `Inclure ${rarity}`)
     button.append(createRarityBadge(rarity))
     button.addEventListener('click', () => {
       button.setAttribute(
@@ -62,24 +63,24 @@ export function createPriceControls(): HTMLElement {
   const force = document.createElement('input')
   force.type = 'checkbox'
   force.dataset.priceForce = '1'
-  forceLabel.append(force, ' Refresh cached prices')
+  forceLabel.append(force, ' Actualiser les prix en cache')
   const capLabel = document.createElement('label')
   capLabel.className = 'wm-note'
-  capLabel.textContent = 'Max requests '
+  capLabel.textContent = 'Requêtes max '
   const cap = document.createElement('input')
   cap.type = 'number'
   cap.min = '1'
   cap.max = '100'
   cap.value = '50'
   cap.dataset.priceCap = '1'
-  cap.setAttribute('aria-label', 'Maximum price requests')
+  cap.setAttribute('aria-label', 'Nombre maximal de requêtes de prix')
   capLabel.append(cap)
   const actions = document.createElement('div')
   actions.className = 'wm-collection-actions'
   const start = document.createElement('button')
   start.type = 'button'
   start.className = 'wm-primary-button'
-  start.textContent = 'Load'
+  start.textContent = 'Charger'
   start.dataset.priceStart = '1'
   start.addEventListener('click', () => {
     const active = new Set(
@@ -103,13 +104,13 @@ export function createPriceControls(): HTMLElement {
   const stop = document.createElement('button')
   stop.type = 'button'
   stop.className = 'wm-quiet-button'
-  stop.textContent = 'Stop'
+  stop.textContent = 'Arrêter'
   stop.dataset.priceStop = '1'
   stop.addEventListener('click', cancelPriceBatch)
   actions.append(start, stop)
   const progress = document.createElement('progress')
   progress.dataset.priceProgress = '1'
-  progress.setAttribute('aria-label', 'Price loading progress')
+  progress.setAttribute('aria-label', 'Progression du chargement des prix')
   const state = document.createElement('p')
   state.dataset.priceBatch = '1'
   state.className = 'wm-note'
@@ -173,13 +174,15 @@ export function renderPricePanel(): void {
   const limit = priceRequestLimit()
   text.textContent =
     state.total || state.cancelled
-      ? `${state.done} / ${state.total} · ${state.running ? '…' : state.cancelled ? 'stopped' : state.done < state.total ? 'paused' : '✓'}${state.failed ? ` · ${state.failed} !` : ''}${state.skipped ? ` · ${state.skipped} skipped` : ''}${limit ? ` · ${limit}` : ''}`
-      : `${pending} / ${ids.length} cards${limit ? ` · ${limit}` : ''}`
-  text.title = `Summary only · 1 request / 650 ms · 200 / hour per tab · refresh ≥1 min · collection scope uses the currently loaded index (${getCollectionState().status}) · Stop finishes the current read; queued automatic visible-card reads are independent.`
+      ? `${state.done} / ${state.total} · ${state.running ? '…' : state.cancelled ? 'arrêté' : state.done < state.total ? 'en pause' : '✓'}${state.failed ? ` · ${state.failed} !` : ''}${state.skipped ? ` · ${state.skipped} ignorées` : ''}${limit ? ` · ${limit}` : ''}`
+      : `${pending} / ${ids.length} cartes${limit ? ` · ${limit}` : ''}`
+  text.title = `Récapitulatif uniquement · 1 requête / 650 ms · 200 / heure par onglet · actualisation ≥1 min · le périmètre collection utilise l’index chargé (${statusLabel(getCollectionState().status)}) · « Arrêter » termine la lecture actuelle ; les lectures automatiques en file pour les cartes visibles sont indépendantes.`
   start.textContent =
-    currentPriceContext() === 'decision' ? 'Refresh before decision' : 'Load'
+    currentPriceContext() === 'decision'
+      ? 'Actualiser avant de décider'
+      : 'Charger'
   text.title +=
-    ' · album: 24 h; sale/trade: 15 min · only prices older than this threshold are refreshed unless Refresh cached prices is selected.'
+    ' · album : 24 h ; vente / échange : 15 min · seuls les prix plus anciens sont actualisés, sauf si « Actualiser les prix en cache » est coché.'
   start.disabled = state.running || !pending || !!limit
   stop.hidden = !state.running
   progress.hidden = !state.running

@@ -35,7 +35,10 @@ export function createCollectionBody(): HTMLElement {
   const progress = document.createElement('progress')
   progress.dataset.wmCollectionProgress = '1'
   progress.className = 'wm-collection-progress'
-  progress.setAttribute('aria-label', 'Collection loading progress')
+  progress.setAttribute(
+    'aria-label',
+    'Progression du chargement de la collection',
+  )
   const actions = document.createElement('div')
   actions.className = 'wm-collection-actions'
   const load = document.createElement('button')
@@ -51,7 +54,7 @@ export function createCollectionBody(): HTMLElement {
   fresh.className = 'wm-quiet-button'
   fresh.dataset.wmCollectionFresh = '1'
   fresh.textContent = '↻'
-  fresh.title = 'Reload the full collection'
+  fresh.title = 'Recharger la collection complète'
   fresh.setAttribute('aria-label', fresh.title)
   fresh.addEventListener('click', () => {
     void loadCollection(true)
@@ -102,20 +105,20 @@ export function renderCollectionPanel(): void {
     (state.status === 'paused' || state.status === 'error') && state.pages > 0
   summary.textContent = !account
     ? '…'
-    : `${state.cards.length}${state.total === null ? '' : ` / ${state.total}`} cards · ${complete ? '✓' : loading ? '…' : 'partial'}`
-  summary.title = `${state.pages} pages${state.updatedAt ? ` · checked ${new Date(state.updatedAt).toLocaleString()}` : ''}`
+    : `${state.cards.length}${state.total === null ? '' : ` / ${state.total}`} cartes · ${complete ? '✓' : loading ? '…' : 'partiel'}`
+  summary.title = `${state.pages} pages${state.updatedAt ? ` · vérifié le ${new Date(state.updatedAt).toLocaleString('fr-FR')}` : ''}`
   progress.hidden = !loading
   if (state.total !== null) {
     progress.max = Math.max(1, state.total)
     progress.value = state.cards.length
   } else progress.removeAttribute('value')
   load.textContent = loading
-    ? 'Stop'
+    ? 'Arrêter'
     : resumable
-      ? 'Resume'
+      ? 'Reprendre'
       : complete
-        ? 'Refresh'
-        : 'Load collection'
+        ? 'Actualiser'
+        : 'Charger la collection'
   const actionBusy = ['checking', 'verifying', 'running'].includes(
     getSelectionState().phase,
   )
@@ -124,9 +127,13 @@ export function renderCollectionPanel(): void {
   fresh.disabled = loading || !account || actionBusy
   note.textContent =
     state.error ??
-    (state.retrying ? '…' : !state.persistent ? 'Not saved locally.' : '')
+    (state.retrying
+      ? '…'
+      : !state.persistent
+        ? 'Non enregistré localement.'
+        : '')
   note.title = state.retrying
-    ? 'The game is busy; retrying the current page.'
+    ? 'Le jeu est occupé ; nouvelle tentative sur la page actuelle.'
     : (state.error ?? '')
   note.hidden = !note.textContent
   renderCollectionBrowser()
@@ -139,13 +146,13 @@ function createValueControls(): HTMLElement {
   const details = document.createElement('details')
   details.className = 'wm-market-section'
   const summary = document.createElement('summary')
-  summary.textContent = 'Collection value'
+  summary.textContent = 'Valeur de la collection'
   const body = document.createElement('div')
   body.dataset.wmCollectionValue = '1'
   const refresh = document.createElement('button')
   refresh.type = 'button'
   refresh.className = 'wm-quiet-button'
-  refresh.textContent = 'Load / refresh prices · max 50'
+  refresh.textContent = 'Charger / actualiser les prix · max 50'
   refresh.addEventListener('click', () => {
     void startPriceBatch(getCollectionState().cards.map(card => card.id))
   })
@@ -164,25 +171,25 @@ function renderCollectionValue(): void {
   const share = (unknown: number, copies: number): string => {
     const percent = copies ? (100 * unknown) / copies : 0
     return percent > 0 && percent < 0.01
-      ? '<0.01'
-      : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(
+      ? '<0,01'
+      : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(
           percent,
         )
   }
   const text = [
     state.status === 'complete'
-      ? 'Full index'
-      : 'Loaded copies · partial index',
+      ? 'Index complet'
+      : 'Copies chargées · index partiel',
     ...(
       [
-        ['All copies', value.all],
-        ['Duplicates only', value.duplicates],
+        ['Toutes les copies', value.all],
+        ['Doublons uniquement', value.duplicates],
       ] as const
     ).map(
       ([label, subtotal]) =>
-        `${label}: ${subtotal.total === null ? '— (total too large)' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(subtotal.total)} W · ${subtotal.copies - subtotal.unknown} / ${subtotal.copies} valued · ${subtotal.unknown} unvalued (${share(subtotal.unknown, subtotal.copies)}%)${subtotal.stale ? ` · ${subtotal.stale} stale / failed refresh` : ''}`,
+        `${label}: ${subtotal.total === null ? '— (total trop élevé)' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(subtotal.total)} W · ${subtotal.copies - subtotal.unknown} / ${subtotal.copies} évaluées · ${subtotal.unknown} non évaluées (${share(subtotal.unknown, subtotal.copies)}%)${subtotal.stale ? ` · ${subtotal.stale} anciens / actualisation échouée` : ''}`,
     ),
-    `Native rarity averages · shiny copies unvalued${value.oldest ? ` · oldest price ${formatPriceAge(value.oldest)}` : ''}`,
+    `Moyennes natives par rareté · copies brillantes non évaluées${value.oldest ? ` · prix le plus ancien : ${formatPriceAge(value.oldest)}` : ''}`,
   ]
   const signature = JSON.stringify(text)
   if (body.dataset.signature === signature) return
@@ -196,7 +203,7 @@ function renderCollectionValue(): void {
     }),
   )
   body.title =
-    'Indicative sum of known native averages; not guaranteed proceeds. Missing prices are excluded, never treated as zero. Shiny price is not separately exposed by the native summary. Duplicates retain one copy per catalogue ID, rarity and shiny variant, independently of protection rules.'
+    'Somme indicative des moyennes natives connues ; gain non garanti. Les prix manquants sont exclus, jamais considérés comme nuls. Le récapitulatif natif n’isole pas le prix des brillantes. Le calcul des doublons conserve une copie par ID du catalogue, rareté et variante brillante, indépendamment des règles de protection.'
 }
 
 export function mountCollectionBody(): void {

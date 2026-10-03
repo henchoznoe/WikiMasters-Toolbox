@@ -11,6 +11,7 @@ import {
   stopDiscard,
   toggleCopy,
 } from './collection-actions'
+import { statusLabel, storedMessage } from './presentation'
 import { createRarityBadge } from './rarity'
 import type { Protection } from './selection'
 
@@ -46,7 +47,7 @@ function field(text: string, input: HTMLInputElement): HTMLLabelElement {
 export function createSelectionControls(): HTMLElement {
   const section = el('details', 'wm-selection')
   section.dataset.wmSelection = '1'
-  section.append(el('summary', '', 'Select / discard'))
+  section.append(el('summary', '', 'Sélection / défausse'))
   section.addEventListener('toggle', () => {
     if (
       section.open &&
@@ -80,14 +81,14 @@ export function createSelectionControls(): HTMLElement {
     rarities.append(value)
   }
   const protections = el('details', 'wm-selection-protections')
-  protections.append(el('summary', '', 'Keep / protect'))
+  protections.append(el('summary', '', 'Conserver / protéger'))
   const protectFields = el('div', 'wm-selection-options')
   for (const [key, label] of [
-    ['favorites', 'Favorites'],
-    ['tags', 'Tagged'],
-    ['committed', 'Sale / trade'],
-    ['unique', 'Only copy'],
-    ['shiny', 'Shiny'],
+    ['favorites', 'Favoris'],
+    ['tags', 'Avec étiquette'],
+    ['committed', 'Vente / échange'],
+    ['unique', 'Copie unique'],
+    ['shiny', 'Brillante'],
   ] as [Protection, string][]) {
     const input = el('input')
     input.type = 'checkbox'
@@ -108,7 +109,7 @@ export function createSelectionControls(): HTMLElement {
   keep.value = '1'
   keep.dataset.wmKeep = '1'
   keep.title =
-    'Minimum copies kept for each catalogue ID, rarity and shiny variant'
+    'Minimum de copies conservées par ID du catalogue, rareté et variante brillante'
   keep.addEventListener('change', () => {
     const value = Number(keep.value)
     editSelection(rules => {
@@ -117,7 +118,7 @@ export function createSelectionControls(): HTMLElement {
     })
     keep.value = String(getSelectionState().rules.keep)
   })
-  protectFields.append(field('Keep per variant', keep))
+  protectFields.append(field('Conserver par variante', keep))
   protections.append(protectFields)
   const status = el('p', 'wm-selection-total')
   status.dataset.wmSelectionTotal = '1'
@@ -127,19 +128,19 @@ export function createSelectionControls(): HTMLElement {
     void checkSelection()
   })
   check.dataset.wmSelectionCheck = '1'
-  check.title = 'Refresh collection and protections'
+  check.title = 'Actualiser la collection et les protections'
   check.setAttribute('aria-label', check.title)
-  const clear = button('Clear', resetSelection)
+  const clear = button('Effacer', resetSelection)
   clear.dataset.wmSelectionClear = '1'
-  const preview = button('Preview', previewDiscard, 'wm-primary-button')
+  const preview = button('Aperçu', previewDiscard, 'wm-primary-button')
   preview.dataset.wmSelectionPreview = '1'
   actions.append(check, clear, preview)
   const copies = el('details', 'wm-selection-copies')
-  copies.append(el('summary', '', 'Adjust copies'))
+  copies.append(el('summary', '', 'Ajuster les copies'))
   const query = el('input', 'wm-selection-search')
   query.type = 'search'
-  query.placeholder = 'Search all copies'
-  query.setAttribute('aria-label', 'Search all copies')
+  query.placeholder = 'Rechercher dans toutes les copies'
+  query.setAttribute('aria-label', 'Rechercher dans toutes les copies')
   query.addEventListener('input', () => {
     search = query.value
     page = 0
@@ -156,7 +157,7 @@ export function createSelectionControls(): HTMLElement {
   list.dataset.wmCopyList = '1'
   const pages = el('div', 'wm-selection-pagination')
   pages.dataset.wmCopyPages = '1'
-  copies.append(query, field('Selected only', selected), list, pages)
+  copies.append(query, field('Sélection uniquement', selected), list, pages)
   copies.addEventListener('toggle', () => {
     if (copies.open) renderCopyList(copies)
   })
@@ -252,13 +253,13 @@ function renderCopyList(section: HTMLElement): void {
     page--
     renderCopyList(section)
   })
-  previous.setAttribute('aria-label', 'Previous copies')
+  previous.setAttribute('aria-label', 'Copies précédentes')
   previous.disabled = page === 0
   const next = button('→', () => {
     page++
     renderCopyList(section)
   })
-  next.setAttribute('aria-label', 'Next copies')
+  next.setAttribute('aria-label', 'Copies suivantes')
   next.disabled = page + 1 >= total
   pages.replaceChildren(
     previous,
@@ -303,8 +304,8 @@ export function renderSelectionPanel(): void {
     total.textContent = busy
       ? `${value.phase === 'running' ? `${value.results.filter(item => item.status !== 'pending').length} / ${value.total}` : '…'}`
       : value.ready
-        ? `${value.plan.cards.length} selected`
-        : 'Check collection / protections'
+        ? `${value.plan.cards.length} sélectionnées`
+        : 'Vérifiez la collection / les protections'
   const preview = section.querySelector<HTMLButtonElement>(
     '[data-wm-selection-preview]',
   )
@@ -337,11 +338,11 @@ export function renderSelectionPanel(): void {
       review.hidden = !value.reviewed
       if (value.reviewed) {
         review.append(
-          el('h3', '', 'Discard preview'),
+          el('h3', '', 'Aperçu de la défausse'),
           el(
             'p',
             '',
-            `${value.plan.cards.length} ${value.plan.cards.length === 1 ? 'copy' : 'copies'} · permanent`,
+            `${value.plan.cards.length} ${value.plan.cards.length === 1 ? 'copie' : 'copies'} · définitif`,
           ),
         )
         const table = el('div', 'wm-selection-list')
@@ -368,20 +369,20 @@ export function renderSelectionPanel(): void {
           )
         )
           review.append(
-            el('p', 'wm-selection-warning', 'SR / UR / L in selection'),
+            el('p', 'wm-selection-warning', 'SR / UR / L dans la sélection'),
           )
         review.append(
           el(
             'p',
             'wm-note',
-            'Copies are permanently removed. Stop takes effect after the current request.',
+            'Les copies sont supprimées définitivement. L’arrêt prend effet après la requête actuelle.',
           ),
         )
         const controls = el('div', 'wm-collection-actions')
         controls.append(
-          button('Cancel', cancelDiscard),
+          button('Annuler', cancelDiscard),
           button(
-            `Discard ${value.plan.cards.length}`,
+            `Défausser ${value.plan.cards.length}`,
             () => {
               void executeDiscard()
             },
@@ -404,7 +405,9 @@ export function renderSelectionPanel(): void {
       result.dataset.result = key
       result.replaceChildren()
       if (['checking', 'running', 'verifying'].includes(value.phase))
-        result.append(button(value.stop ? 'Stopping…' : 'Stop', stopDiscard))
+        result.append(
+          button(value.stop ? 'Arrêt en cours…' : 'Arrêter', stopDiscard),
+        )
       if (value.results.length || value.phase === 'done') {
         const done = value.results.filter(
           item => item.status === 'discarded',
@@ -419,7 +422,7 @@ export function renderSelectionPanel(): void {
           el(
             'p',
             'wm-selection-total',
-            `${done} discarded · ${failed} failed · ${unknown} uncertain · ${value.total - value.results.length} not attempted`,
+            `${done} défaussées · ${failed} échouées · ${unknown} incertaines · ${value.total - value.results.length} non tentées`,
           ),
         )
         if (unknown)
@@ -427,17 +430,17 @@ export function renderSelectionPanel(): void {
             el(
               'p',
               'wm-selection-warning',
-              'Uncertain result. Refresh and review before another action.',
+              'Résultat incertain. Actualisez et vérifiez avant une autre action.',
             ),
           )
         const details = el('details')
-        details.append(el('summary', '', 'Results'))
+        details.append(el('summary', '', 'Résultats'))
         const list = el('div', 'wm-selection-list')
         for (const item of value.results) {
           const row = el(
             'p',
             '',
-            `${item.title} · ${item.status}${item.error ? ` · ${item.error}` : ''}`,
+            `${item.title} · ${statusLabel(item.status)}${item.error ? ` · ${storedMessage(item.error)}` : ''}`,
           )
           row.title = item.copyId
           list.append(row)

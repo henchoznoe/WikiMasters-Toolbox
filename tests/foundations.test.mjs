@@ -203,10 +203,10 @@ test('server pauses apply across price, collection and writes; transport retries
     'content/requests': 'requestJson,requestWrite,requestLimit',
   })
   await assert.rejects(c.requestJson('/api/prices'), /429/)
-  await assert.rejects(c.requestJson('/api/collection'), /Server pause/)
+  await assert.rejects(c.requestJson('/api/collection'), /Pause serveur/)
   await assert.rejects(
     c.requestWrite('/api/write', new AbortController().signal, {}),
-    /Server pause/,
+    /Pause serveur/,
   )
   assert.equal(calls, 1)
   f.advance(121_000)
@@ -241,8 +241,8 @@ test('account and route cancellation reject late responses and drop queued reads
   const active = c.requestJson('/api/collection')
   const queued = c.requestJson('/api/market')
   const rejected = Promise.all([
-    assert.rejects(active, /stopped/i),
-    assert.rejects(queued, /stopped/i),
+    assert.rejects(active, /arrêtée/i),
+    assert.rejects(queued, /arrêtée/i),
   ])
   c.setAccountId(B)
   release(new Response('{"old":true}'))
@@ -264,7 +264,7 @@ test('the shared timeout covers stalled response decoding and releases the queue
   const writing = c.requestWrite('/api/write', new AbortController().signal, {})
   await settle()
   for (const timer of f.timers.values()) timer()
-  await assert.rejects(writing, /timed out/)
+  await assert.rejects(writing, /Délai de requête dépassé/)
   c.fetch = async () => new Response('{}')
   await c.requestWrite('/api/next', new AbortController().signal, {})
 })
@@ -492,7 +492,10 @@ test('a changed grid selector produces a visible compatibility diagnostic withou
     },
   ])
   c.renderCards()
-  assert.match(c.getCompatibilityIssues().join(' '), /Card layout changed/)
+  assert.match(
+    c.getCompatibilityIssues().join(' '),
+    /Présentation des cartes modifiée/,
+  )
 })
 
 test('background diagnostics stay on their affected route and native count responses are not card contracts', async () => {
@@ -512,7 +515,7 @@ test('background diagnostics stay on their affected route and native count respo
 })
 
 test('non-JSON HTTP errors preserve not-found prices and server status rather than claiming a format change', async () => {
-  const f = fixture(async () => new Response('Not found', { status: 404 }))
+  const f = fixture(async () => new Response('Introuvable', { status: 404 }))
   const c = await expose(f.context, {
     'content/price-store': 'requestPriceQuote,readPriceQuote',
     'content/requests': 'requestJson',
@@ -521,4 +524,20 @@ test('non-JSON HTTP errors preserve not-found prices and server status rather th
   assert.equal(c.readPriceQuote('synthetic-missing', 'R').status, 'not-found')
   c.fetch = async () => new Response('Temporarily unavailable', { status: 503 })
   await assert.rejects(c.requestJson('/api/collection'), /HTTP 503/)
+})
+
+test('localized session and malformed-response errors never trigger transport retries', async () => {
+  for (const [status, body, expected] of [
+    [401, '{}', /Session expirée/],
+    [200, 'invalid json', /Réponse du jeu modifiée/],
+  ]) {
+    let calls = 0
+    const f = fixture(async () => {
+      calls++
+      return new Response(body, { status })
+    })
+    const c = await expose(f.context, { 'content/requests': 'requestJson' })
+    await assert.rejects(c.requestJson('/api/collection'), expected)
+    assert.equal(calls, 1)
+  }
 })

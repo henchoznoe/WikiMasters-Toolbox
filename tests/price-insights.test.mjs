@@ -78,7 +78,7 @@ test('alerts only notify threshold crossings from fresh exact-rarity observation
     h.context,
   )
   c.setAccountId(A)
-  assert.match(c.setPriceAlert(rule(c.Date.now())), /saved/)
+  assert.match(c.setPriceAlert(rule(c.Date.now())), /enregistrée/)
   h.advance(1000)
   c.observePriceAlerts('catalogue', { R: 12 }, c.Date.now())
   assert.equal(
@@ -125,15 +125,12 @@ test('alerts isolate accounts, validate thresholds, bound notifications and surf
     ],
     h.context,
   )
-  assert.match(c.setPriceAlert(rule(c.Date.now())), /Sign in/)
+  assert.match(c.setPriceAlert(rule(c.Date.now())), /Connectez-vous/)
   c.setAccountId(A)
-  assert.match(
-    c.setPriceAlert(rule(c.Date.now(), { threshold: 0 })),
-    /positive/,
-  )
+  assert.match(c.setPriceAlert(rule(c.Date.now(), { threshold: 0 })), /positif/)
   assert.match(
     c.setPriceAlert(rule(c.Date.now(), { rarity: 'invalid' })),
-    /positive/,
+    /positif/,
   )
   c.setPriceAlert(rule(c.Date.now(), { direction: 'below', previous: 12 }))
   for (let i = 0; i < 220; i++) {
@@ -152,7 +149,7 @@ test('alerts isolate accounts, validate thresholds, bound notifications and surf
   h.context.localStorage.setItem = () => {
     throw new Error('quota')
   }
-  assert.match(c.setPriceAlert(rule(c.Date.now())), /unavailable/)
+  assert.match(c.setPriceAlert(rule(c.Date.now())), /indisponible/)
 })
 
 test('price engine alerts only on successful reads; failed refresh retains reference and diagnostics beyond retry delay', async () => {
@@ -292,13 +289,19 @@ test('listing comparisons distinguish starting, bid and concluded amounts with u
   }
   const quote = { status: 'available', average: 10, fetchedAt: Date.now() }
   const result = c.listingComparison(row, quote)
-  assert.match(result.text, /Starting price 5 W · vs average -5 W · -50.0%/)
-  assert.match(result.text, /Current bid 15 W · vs average \+5 W · \+50.0%/)
-  assert.match(result.hint, /average only/)
-  assert.doesNotMatch(result.text, /Final sale/)
+  assert.match(
+    result.text,
+    /Mise de départ 5 W · écart à la moyenne -5 W · -50,0 %/,
+  )
+  assert.match(
+    result.text,
+    /Offre actuelle 15 W · écart à la moyenne \+5 W · \+50,0 %/,
+  )
+  assert.match(result.hint, /moyenne seule/)
+  assert.doesNotMatch(result.text, /Vente finale/)
   assert.match(
     c.listingComparison({ ...row, status: 'settled_sold' }, quote).text,
-    /Final sale 20 W/,
+    /Vente finale 20 W/,
   )
   assert.doesNotMatch(
     c.listingComparison(row, { ...quote, average: 0 }).text,
@@ -306,17 +309,17 @@ test('listing comparisons distinguish starting, bid and concluded amounts with u
   )
   assert.match(
     c.listingComparison(row, { ...quote, failed: true }).hint,
-    /refresh failed/,
+    /actualisation échouée/,
   )
   assert.match(
     c.listingComparison(row, { status: 'no-sales', fetchedAt: Date.now() })
       .text,
-    /vs average —/,
+    /écart à la moyenne —/,
   )
   assert.match(
     c.listingComparison({ ...row, card: { ...row.card, shiny: true } }, quote)
       .text,
-    /shiny reference unavailable/,
+    /référence des brillantes indisponible/,
   )
 })
 
@@ -456,15 +459,15 @@ test('alert cap preserves existing rules, reloads them and expires old notificat
   for (let i = 0; i < 50; i++)
     assert.match(
       c.setPriceAlert(rule(c.Date.now(), { id: `card-${i}`, previous: 8 })),
-      /saved/,
+      /enregistrée/,
     )
   assert.match(
     c.setPriceAlert(rule(c.Date.now(), { id: 'overflow' })),
-    /50 alerts maximum/,
+    /50 alertes maximum/,
   )
   assert.match(
     c.setPriceAlert(rule(c.Date.now(), { id: 'card-0', previous: 8 })),
-    /saved/,
+    /enregistrée/,
   )
   h.advance(1000)
   c.observePriceAlerts('card-0', { R: 12 }, c.Date.now())

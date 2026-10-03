@@ -272,8 +272,8 @@ test('decision freshness is 15 minutes while album reuse remains 24 hours and or
     'decision',
   )
   assert.equal(failed.age, '15 min')
-  assert.match(failed.hint, /refresh before deciding/)
-  assert.match(failed.hint, /refresh failed/)
+  assert.match(failed.hint, /actualisez avant de décider/)
+  assert.match(failed.hint, /actualisation échouée/)
   assert.equal(c.presentPrice(quote).value, '12 W')
   assert.equal(c.presentPrice(quote, 'decision').value, '12 W ↻')
 })
@@ -494,8 +494,8 @@ test('an open inspector follows entry into and exit from a native sale context',
   saleForm = true
   c.renderPriceInspector()
   assert.equal(value.textContent, '12 W ↻ · 20 min')
-  assert.match(value.title, /refresh before deciding/)
-  assert.equal(refresh.textContent, '↻ Refresh before decision')
+  assert.match(value.title, /actualisez avant de décider/)
+  assert.equal(refresh.textContent, '↻ Actualiser avant de décider')
   saleForm = false
   c.renderPriceInspector()
   assert.equal(value.textContent, '12 W · 20 min')

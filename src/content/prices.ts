@@ -128,7 +128,7 @@ function updatePriceBadge(badge: HTMLElement, quote: PriceQuote): void {
     age.hidden = !presentation.age
   }
   if (badge.title !== presentation.hint) badge.title = presentation.hint
-  const spoken = `${presentation.status === 'available' ? 'Average sale price' : 'Average sale price status'}: ${presentation.value}${presentation.age ? `, checked ${presentation.age} ago` : ''}. ${presentation.hint}`
+  const spoken = `${presentation.status === 'available' ? 'Prix moyen de vente' : 'État du prix moyen de vente'}: ${presentation.value}${presentation.age ? `, vérifié il y a ${presentation.age}` : ''}. ${presentation.hint}`
   if (badge.getAttribute('aria-label') !== spoken)
     badge.setAttribute('aria-label', spoken)
 }
@@ -250,7 +250,9 @@ export function renderCards(): void {
   }
   setCompatibilityIssue(
     'card-ui',
-    missingLayout ? 'Card layout changed; some prices hidden' : null,
+    missingLayout
+      ? 'Présentation des cartes modifiée ; certains prix masqués'
+      : null,
   )
   for (const heading of document.querySelectorAll<HTMLElement>('h2')) {
     const parent = heading.parentElement
@@ -417,7 +419,7 @@ export async function hydrateRoute(): Promise<void> {
     if (!cards) {
       setCompatibilityIssue(
         adapter.id,
-        'Game data format changed; reload the page',
+        'Format des données du jeu modifié ; rechargez la page',
       )
       return
     }
@@ -433,7 +435,7 @@ export async function hydrateRoute(): Promise<void> {
       ) {
         setCompatibilityIssue(
           'collection',
-          'Collection account mismatch; actions paused',
+          'Compte de la collection différent ; actions suspendues',
         )
         return
       }
@@ -445,7 +447,7 @@ export async function hydrateRoute(): Promise<void> {
     if (!run.signal.aborted && getAccountId() === expectedAccount)
       setCompatibilityIssue(
         `read:${adapter.id}`,
-        'Page data unavailable; reload to retry',
+        'Données de page indisponibles ; rechargez pour réessayer',
       )
   } finally {
     if (hydration === run) hydration = null

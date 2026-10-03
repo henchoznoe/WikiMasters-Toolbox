@@ -63,7 +63,7 @@ export function syncToolboxPanel(
   const panel = document.createElement('section')
   panel.setAttribute(
     'aria-label',
-    `Toolbox ${page.label.toLowerCase()} controls`,
+    `Toolbox ${page.label.toLowerCase()} : commandes`,
   )
   panel.className = 'wm-panel'
   const initiallyExpanded = !readPanelCollapsed()
@@ -82,20 +82,20 @@ export function syncToolboxPanel(
   disclosure.className = 'wm-panel-disclosure'
   disclosure.setAttribute(
     'aria-label',
-    `${initiallyExpanded ? 'Hide' : 'Show'} Toolbox controls`,
+    `${initiallyExpanded ? 'Masquer' : 'Afficher'} les commandes Toolbox`,
   )
   disclosure.setAttribute('aria-expanded', String(initiallyExpanded))
-  disclosure.textContent = initiallyExpanded ? 'Hide' : 'Show'
+  disclosure.textContent = initiallyExpanded ? 'Masquer' : 'Afficher'
   disclosure.addEventListener('click', () => {
     const expanded = panel.classList.toggle('wm-panel-open')
     writePanelCollapsed(!expanded)
     if (!expanded) page.onHide?.()
     disclosure.setAttribute(
       'aria-label',
-      `${expanded ? 'Hide' : 'Show'} Toolbox controls`,
+      `${expanded ? 'Masquer' : 'Afficher'} les commandes Toolbox`,
     )
     disclosure.setAttribute('aria-expanded', String(expanded))
-    disclosure.textContent = expanded ? 'Hide' : 'Show'
+    disclosure.textContent = expanded ? 'Masquer' : 'Afficher'
   })
   header.append(title, mark, disclosure)
   const body = page.createBody()

@@ -70,7 +70,7 @@ function restore(): void {
         }
       }
     } catch {
-      error = 'Views unavailable'
+      error = 'Vues indisponibles'
     }
   }
   notify()
@@ -101,7 +101,7 @@ function persist(nextCompact: boolean, nextViews: SavedView[]): boolean {
     notify()
     return true
   } catch {
-    error = 'Not saved locally'
+    error = 'Non enregistré localement'
     notify()
     return false
   }
@@ -127,7 +127,7 @@ export function saveView(
     return false
   const next = views.filter(view => view.name !== clean)
   if (next.length >= 30) {
-    error = '30 views maximum'
+    error = '30 vues maximum'
     notify()
     return false
   }

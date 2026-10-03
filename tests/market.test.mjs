@@ -110,7 +110,7 @@ test('ranking groups exact variants, includes missing prices and never substitut
   assert.equal(ranked.find(r => r.card.copyId === 'copy-a').copies.length, 2)
   assert.equal(
     c.priceDifference(15, { status: 'available', average: 10, fetchedAt: 1 }),
-    '+5 W · +50.0%',
+    '+5 W · +50,0 %',
   )
   assert.equal(
     c.priceDifference(15, { status: 'available', average: 0, fetchedAt: 1 }),
@@ -148,11 +148,11 @@ test('active comparables require exact catalogue, rarity, shiny and active end t
       copyIds: new Set(['copy-a']),
       catalogueIds: new Set(),
     }),
-    'Copy in a sale / trade',
+    'Copie en vente / échange',
   )
   assert.match(
     c.saleBlock(copy(), OTHER, { copyIds: new Set(), catalogueIds: new Set() }),
-    /no longer owned/,
+    /non détenue/,
   )
 })
 test('market reads deduplicate, reuse the price budget and stop on server pause', async () => {
@@ -204,7 +204,7 @@ test('market reads deduplicate, reuse the price budget and stop on server pause'
   )
   await assert.rejects(
     paused.requestMarketJson('/api/trades', signal),
-    /Server pause/,
+    /Pause serveur/,
   )
 })
 test('my sales exclude purchased history and clear on account changes', async () => {
@@ -355,7 +355,7 @@ test('sale checks complete collection, protects unique copies, journals before n
   c.setAccountId(OWNER)
   c.observeSaleCard(CARD)
   await c.checkSale(false)
-  assert.match(c.getSaleState().error, /Only copy/)
+  assert.match(c.getSaleState().error, /Copie unique/)
   const checking = c.checkSale(true)
   for (let i = 0; i < 240 && !c.getSaleState().checked; i++)
     await new Promise(r => setTimeout(r, 25))
@@ -392,7 +392,7 @@ test('sale never allows another account or a missing possession and fails closed
   c.setAccountId(OWNER)
   c.observeSaleCard(CARD)
   await c.checkSale(true)
-  assert.match(c.getSaleState().error, /no longer owned/)
+  assert.match(c.getSaleState().error, /non détenue/)
   const confirmation = new Event('wm-toolbox:sale-submit', {
     detail: JSON.stringify({ accountId: OTHER, card: CARD, amount: 15 }),
   })
@@ -495,7 +495,7 @@ test('receipt storage failure and a busy browser lock prevent native approval', 
   c.navigator.locks.request = async (_name, _options, callback) =>
     callback(null)
   await c.checkSale(true)
-  assert.match(c.getSaleState().error, /another tab/)
+  assert.match(c.getSaleState().error, /autre onglet/)
 })
 test('a committed copy remains unsellable even after acknowledging protections', async () => {
   const ctx = saleContext(async url =>
@@ -512,7 +512,7 @@ test('a committed copy remains unsellable even after acknowledging protections',
   c.observeSaleCard(CARD)
   await c.checkSale(true)
   assert.equal(c.getSaleState().checked, false)
-  assert.equal(c.getSaleState().error, 'Copy in a sale / trade')
+  assert.equal(c.getSaleState().error, 'Copie en vente / échange')
 })
 
 test('sale applies the retained-copy rule independently of the discard selection', async () => {
@@ -539,6 +539,6 @@ test('sale applies the retained-copy rule independently of the discard selection
     rules.keep = 2
   })
   await c.checkSale(false)
-  assert.match(c.getSaleState().error, /Keep 2/)
+  assert.match(c.getSaleState().error, /Conserver 2/)
   assert.equal(c.getSaleState().checked, false)
 })

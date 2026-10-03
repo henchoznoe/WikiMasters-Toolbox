@@ -10,6 +10,7 @@ import {
 import { getSelectionState, parseCommitments } from './collection-actions'
 import { saleBlock } from './market-model'
 import { chooseComparables } from './market-store'
+import { errorMessage } from './presentation'
 import { requestMarketJson } from './price-store'
 import { buildSelection } from './selection'
 import { isCard } from './shared'
@@ -122,7 +123,7 @@ export function observeSaleCard(value: unknown): void {
 }
 export function requireSaleCheck(): void {
   cancelSale()
-  error = 'Check this copy before confirming in the game'
+  error = 'Vérifiez cette copie avant de confirmer dans le jeu'
   notify()
 }
 export function inspectCopy(copyId: string): void {
@@ -136,7 +137,7 @@ export async function checkSale(acknowledge: boolean): Promise<void> {
   if (!expected?.copyId || !owner || busy || submitted) return
   cancelSale()
   if (!navigator.locks) {
-    error = 'Browser locking unavailable'
+    error = 'Verrouillage du navigateur indisponible'
     notify()
     return
   }
@@ -150,7 +151,7 @@ export async function checkSale(acknowledge: boolean): Promise<void> {
     { ifAvailable: true },
     async lock => {
       if (!lock) {
-        error = 'An action is running in another tab'
+        error = 'Une action est en cours dans un autre onglet'
         busy = false
         notify()
         return
@@ -160,7 +161,7 @@ export async function checkSale(acknowledge: boolean): Promise<void> {
         if (run.signal.aborted || owner !== getAccountId() || card !== expected)
           return
         if (getCollectionState().status !== 'complete')
-          throw new Error('Complete collection unavailable')
+          throw new Error('Collection complète indisponible')
         const market = await requestMarketJson(
           '/api/marketplace?page=1&limit=1&mine=1',
           run.signal,
@@ -176,7 +177,7 @@ export async function checkSale(acknowledge: boolean): Promise<void> {
         const blocked = saleBlock(copy, owner, commitments)
         if (blocked) throw new Error(blocked)
         if (!copy || cardVariantKey(copy) !== cardVariantKey(expected))
-          throw new Error('Copy changed')
+          throw new Error('Copie modifiée')
         const rules = getSelectionState().rules
         const protectedReason = buildSelection(
           getCollectionState().cards,
@@ -189,7 +190,9 @@ export async function checkSale(acknowledge: boolean): Promise<void> {
           commitments,
         ).blocked.get(copy.copyId)
         if (protectedReason && !acknowledge)
-          throw new Error(`${protectedReason} · acknowledge protection to sell`)
+          throw new Error(
+            `${protectedReason} · acceptez la vente d’une copie protégée`,
+          )
         checkedUntil = Date.now() + 30_000
         approvedProtections = protectionKey()
         nativeMarket('approve', { copyId: copy.copyId })
@@ -209,7 +212,7 @@ export async function checkSale(acknowledge: boolean): Promise<void> {
         })
       } catch (cause) {
         if (!run.signal.aborted)
-          error = cause instanceof Error ? cause.message : 'Copy check failed'
+          error = errorMessage(cause, 'Vérification de la copie échouée')
       } finally {
         if (request === run) {
           request = null
@@ -240,7 +243,7 @@ window.addEventListener('wm-toolbox:sale-submit', event => {
       !release ||
       !getOwnedCopy(card.copyId as string)
     )
-      throw new Error('Check again')
+      throw new Error('Vérifier à nouveau')
     // Saved as uncertain before allowing the game to send its write. Never auto-retry a native sale.
     localStorage.setItem(
       SALE_JOURNAL_PREFIX + getAccountId(),
@@ -285,8 +288,8 @@ export function observeSaleResult(status: unknown, auctionId: unknown): void {
     status === 'listed'
       ? null
       : status === 'rejected'
-        ? 'Game rejected the sale · check again'
-        : 'Result uncertain · verify in My sales'
+        ? 'Vente refusée par le jeu · vérifiez à nouveau'
+        : 'Résultat incertain · vérifiez dans « Mes ventes »'
   submitted = false
   attempt = null
   cancelSale()

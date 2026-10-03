@@ -7,6 +7,7 @@ import {
 import { getAccountId, onAccountChange } from './account'
 import { cachePolicies, onCacheChange, writeCache } from './cache'
 import { collectionCompatible, setCompatibilityIssue } from './compatibility'
+import { errorMessage } from './presentation'
 import { requestJson } from './requests'
 
 export const COLLECTION_PREFIX = 'wm_toolbox_collection_v1:'
@@ -150,7 +151,7 @@ function restore(): void {
           new Set(copies.map(card => card.copyId)).size !== copies.length ||
           (saved.complete && saved.total !== copies.length)
         )
-          throw new Error('Invalid stored collection')
+          throw new Error('Collection enregistrée invalide')
         snapshot = saved
         status = saved.complete
           ? 'complete'
@@ -187,7 +188,7 @@ export function getCollectionState(): CollectionState {
     updatedAt: snapshot?.updatedAt ?? 0,
     error: collectionCompatible()
       ? error
-      : 'Collection format changed; reload the page',
+      : 'Format de collection modifié ; rechargez la page',
     persistent,
     retrying,
   }
@@ -244,7 +245,7 @@ async function readTotal(signal: AbortSignal): Promise<number> {
   const total =
     json.total === null || json.total === undefined ? NaN : Number(json.total)
   if (!Number.isSafeInteger(total) || total < 0)
-    throw new Error('Collection total unavailable')
+    throw new Error('Total de la collection indisponible')
   return total
 }
 async function readPage(
@@ -259,17 +260,17 @@ async function readPage(
   if (!Array.isArray(json.collection) || json.collection.length > PAGE_SIZE) {
     setCompatibilityIssue(
       'collection',
-      'Collection format changed; actions paused',
+      'Format de collection modifié ; actions suspendues',
     )
-    throw new Error('Invalid collection page')
+    throw new Error('Page de collection invalide')
   }
   const cards = json.collection.map(mapOwnedCard)
   if (cards.some(card => !card || card.ownerId !== owner)) {
     setCompatibilityIssue(
       'collection',
-      'Possession format changed; actions paused',
+      'Format des copies modifié ; actions suspendues',
     )
-    throw new Error('Possession identity unavailable')
+    throw new Error('Identité de la copie indisponible')
   }
   return cards as OwnedCard[]
 }
@@ -289,7 +290,7 @@ function fingerprint(cards: readonly OwnedCard[]): string {
 }
 
 export function stopCollectionLoad(): void {
-  controller?.abort(new Error('Loading stopped'))
+  controller?.abort(new Error('Chargement arrêté'))
 }
 
 export function observeCollection(
@@ -316,7 +317,7 @@ export function invalidateCollection(): void {
   const id = getAccountId()
   if (!id) return
   const enabled = snapshot?.enabled ?? false
-  controller?.abort(new Error('Collection changed'))
+  controller?.abort(new Error('Collection modifiée'))
   controller = null
   activeLoad = null
   snapshot = emptySnapshot(id, enabled)
@@ -391,7 +392,7 @@ async function traverseCollection(fresh: boolean): Promise<void> {
     const seen = new Set(current.pages.flat().map(card => card.copyId))
     const targetPages = Math.ceil(total / PAGE_SIZE)
     if (targetPages > MAX_PAGES)
-      throw new Error('Collection exceeds the local index limit')
+      throw new Error('La collection dépasse la limite de l’index local')
     for (let page = current.pages.length; page < targetPages; page += 1) {
       const cards = await readPage(page, id, run.signal)
       if (run.signal.aborted || snapshot !== current || getAccountId() !== id)
@@ -403,7 +404,9 @@ async function traverseCollection(fresh: boolean): Promise<void> {
         new Set(cards.map(card => card.copyId)).size !== cards.length
       ) {
         current.pages = []
-        throw new Error('Collection changed while loading; retry to refresh')
+        throw new Error(
+          'Collection modifiée pendant le chargement ; relancez l’actualisation',
+        )
       }
       for (const card of cards) seen.add(card.copyId)
       current.pages.push(cards)
@@ -422,7 +425,9 @@ async function traverseCollection(fresh: boolean): Promise<void> {
       (total && fingerprint(first) !== fingerprint(current.pages[0]))
     ) {
       current.pages = []
-      throw new Error('Collection changed while loading; retry to refresh')
+      throw new Error(
+        'Collection modifiée pendant le chargement ; relancez l’actualisation',
+      )
     }
     setCompatibilityIssue('collection', null)
     current.complete = true
@@ -433,9 +438,7 @@ async function traverseCollection(fresh: boolean): Promise<void> {
     status = run.signal.aborted ? 'paused' : 'error'
     error = run.signal.aborted
       ? null
-      : cause instanceof Error
-        ? cause.message
-        : 'Collection unavailable'
+      : errorMessage(cause, 'Collection indisponible')
   } finally {
     if (controller === run) {
       controller = null
