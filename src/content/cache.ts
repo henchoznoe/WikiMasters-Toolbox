@@ -14,7 +14,7 @@ export const cachePolicies = {
   },
   prices: {
     prefix: 'wm_toolbox_price_v1_',
-    label: 'Prices · shared',
+    label: 'Prix · partagés',
     freshness: DAY,
     retention: 30 * DAY,
     maxEntries: 1000,
@@ -24,7 +24,7 @@ export const cachePolicies = {
   },
   history: {
     prefix: 'wm_toolbox_price_history_v1_',
-    label: 'Price observations · shared',
+    label: 'Observations de prix · partagées',
     freshness: DAY,
     retention: 90 * DAY,
     maxEntries: 300,
@@ -34,7 +34,7 @@ export const cachePolicies = {
   },
   sales: {
     prefix: 'wm_toolbox_sales_sample_v1:',
-    label: 'Concluded sales · account',
+    label: 'Ventes conclues · compte',
     freshness: DAY,
     retention: 30 * DAY,
     maxEntries: 10,

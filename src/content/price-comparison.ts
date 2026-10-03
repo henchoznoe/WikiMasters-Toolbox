@@ -41,18 +41,18 @@ export function listingComparison(
   const reference = presentPrice(quote, 'decision')
   if (row.card.shiny)
     return {
-      text: 'Comparison — · shiny reference unavailable',
-      hint: 'Native average does not isolate shiny prices',
+      text: 'Comparaison — · référence des brillantes indisponible',
+      hint: 'La moyenne native n’isole pas les prix des brillantes',
     }
   const values: [string, number | null][] =
     row.status === 'settled_sold'
-      ? [['Final sale', row.final]]
+      ? [['Vente finale', row.final]]
       : [
-          ['Starting price', row.base],
-          ['Current bid', row.bid],
+          ['Mise de départ', row.base],
+          ['Offre actuelle', row.bid],
         ]
   return {
-    text: `${values.map(([label, value]) => `${label} ${value ?? '—'} W · vs average ${value === null ? '—' : priceDifference(value, quote)}`).join(' | ')} · average only · reference ${reference.value}${reference.age ? ` · ${reference.age}` : ''}`,
-    hint: `${reference.hint} · starting amounts and bids are not concluded sales · percentage unavailable when reference is zero`,
+    text: `${values.map(([label, value]) => `${label} ${value ?? '—'} W · écart à la moyenne ${value === null ? '—' : priceDifference(value, quote)}`).join(' | ')} · moyenne seule · référence ${reference.value}${reference.age ? ` · ${reference.age}` : ''}`,
+    hint: `${reference.hint} · les mises de départ et offres ne sont pas des ventes conclues · pourcentage indisponible si la référence est nulle`,
   }
 }

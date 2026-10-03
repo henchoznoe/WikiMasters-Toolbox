@@ -1,6 +1,7 @@
 import { type Card, cardVariantKey } from '../cards'
 import { getAccountId, onAccountChange } from './account'
 import { type Auction, mapAuction } from './market-model'
+import { errorMessage } from './presentation'
 import { requestMarketJson } from './price-store'
 import { saleSample } from './sales-model'
 import { observeSaleSamples } from './sales-store'
@@ -173,14 +174,14 @@ export async function loadMarket(
         !Array.isArray(data.selling) ||
         !Array.isArray(data.history)
       )
-        throw new Error('Sales unavailable')
+        throw new Error('Ventes indisponibles')
       observeMarket(data)
     } else {
       if (!Array.isArray(data.auctions) || typeof data.hasMore !== 'boolean')
-        throw new Error('Comparables unavailable')
+        throw new Error('Annonces comparables indisponibles')
       const mapped = data.auctions.map(mapAuction)
       if (mapped.some(row => !row))
-        throw new Error('Listing identity unavailable')
+        throw new Error('Identité de l’annonce indisponible')
       const unique = new Map((more ? state.rows : []).map(row => [row.id, row]))
       for (const row of mapped) if (row) unique.set(row.id, row)
       state.rows = [...unique.values()]
@@ -190,8 +191,7 @@ export async function loadMarket(
     }
   } catch (cause) {
     if (!request.signal.aborted)
-      state.error =
-        cause instanceof Error ? cause.message : 'Market unavailable'
+      state.error = errorMessage(cause, 'Marché indisponible')
   } finally {
     if (run === request) {
       run = null

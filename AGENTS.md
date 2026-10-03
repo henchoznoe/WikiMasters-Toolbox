@@ -6,6 +6,8 @@ WikiMasters Toolbox is a Chrome Manifest V3 extension for WikiMasters. Every opt
 
 Equivalent capabilities may be implemented for free using local logic or freely accessible game data, even if the game charges for its own implementation. Preserve this distinction when planning features: assess the data needed, rather than excluding an idea because of the native game's pricing.
 
+All user-facing Toolbox text must be in French, including tooltips, confirmations, errors and accessibility labels. Format displayed numbers and dates using French conventions. Keep code identifiers, protocol values, storage keys and technical documentation in English; `ROADMAP.md` is in French. Preserve native card titles and user-provided content.
+
 The interface should remain compact and consistent with the game. Use `…` for loading, concise status messages and existing Toolbox styles. Keep the README as a project overview with installation, contribution and delivery instructions; planned work belongs in `ROADMAP.md`.
 
 `AGENTS.md` is the single source of repository guidance. `CLAUDE.md` must remain a relative symlink to `AGENTS.md`; edit this file when updating instructions.

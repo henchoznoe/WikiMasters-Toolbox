@@ -65,17 +65,17 @@ export function buildSelection(
     for (const card of group) {
       const reason =
         rules.protect.favorites && card.starred
-          ? 'Favorite'
+          ? 'Favori'
           : rules.protect.tags && card.tagIds.length
-            ? 'Tagged'
+            ? 'Avec étiquette'
             : rules.protect.committed &&
                 (commitments.copyIds.has(card.copyId) ||
                   commitments.catalogueIds.has(card.id))
-              ? 'Sale / trade'
+              ? 'Vente / échange'
               : rules.protect.unique && group.length === 1
-                ? 'Only copy'
+                ? 'Copie unique'
                 : rules.protect.shiny && card.shiny
-                  ? 'Shiny'
+                  ? 'Brillante'
                   : null
       if (reason) blocked.set(card.copyId, reason)
       else if (
@@ -96,7 +96,7 @@ export function buildSelection(
       Math.min(requested.length, keep - (group.length - requested.length)),
     )
     for (const card of requested.slice(0, reserve))
-      blocked.set(card.copyId, `Keep ${keep}`)
+      blocked.set(card.copyId, `Conserver ${keep}`)
     const discarded = requested.slice(reserve)
     selected.push(...discarded)
     if (discarded.length)

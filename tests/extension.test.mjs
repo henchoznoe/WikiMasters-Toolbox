@@ -63,14 +63,14 @@ test('the shared panel resolves labels by page', async () => {
   }
   await exposeModule('panel', ['resolvePanelPage'], context)
   const pages = [
-    { id: 'packs', label: 'Packs', matches: path => path === '/pulls' },
+    { id: 'packs', label: 'Paquets', matches: path => path === '/pulls' },
     {
       id: 'collection',
       label: 'Collection',
       matches: path => path === '/collection',
     },
   ]
-  assert.equal(context.resolvePanelPage('/pulls', pages).label, 'Packs')
+  assert.equal(context.resolvePanelPage('/pulls', pages).label, 'Paquets')
   assert.equal(
     context.resolvePanelPage('/collection', pages).label,
     'Collection',
@@ -328,7 +328,7 @@ test('manual bulk opening refreshes the game after every available pack is opene
     stored.get(`session:wm_toolbox_last_pack_run_v2:${ACCOUNT_A}`),
   )
   assert.equal(summary.opened, 3)
-  assert.equal(summary.detail, 'No packs remain.')
+  assert.equal(summary.detail, 'Il ne reste aucun paquet.')
   assert.equal(summary.cards.length, 3)
   assert.deepEqual(JSON.parse(JSON.stringify(summary.cards[0])), {
     id: 'card-1',
@@ -419,7 +419,7 @@ test('a manual pack limit stops without requesting an extra pack', async () => {
     stored.get(`session:wm_toolbox_last_pack_run_v2:${ACCOUNT_A}`),
   )
   assert.equal(summary.opened, 2)
-  assert.equal(summary.detail, 'Reached your 2-pack limit.')
+  assert.equal(summary.detail, 'Limite atteinte : 2 paquets.')
   assert.equal(summary.cards.length, 2)
   assert.equal(summary.cards[1].title, 'Card 2')
 })
@@ -529,7 +529,7 @@ test('price presentation shows fetch age without implying a sale window', async 
   })
   assert.equal(available.value, '125 W')
   assert.equal(available.age, '2 h')
-  assert.match(available.hint, /source period not specified/)
+  assert.match(available.hint, /période de calcul non précisée/)
   const noSales = context.presentPrice({ status: 'no-sales', fetchedAt })
   assert.equal(noSales.value, '—')
   assert.equal(noSales.age, '2 h')
@@ -880,7 +880,7 @@ for (const [mode, beforeChallenge] of [
     assert.equal(requests, beforeChallenge + 1)
     assert.equal(context.getPrefs().verificationRequired, true)
     assert.equal(context.getPrefs().nextAt, 0)
-    assert.match(context.getStatus(), /Verification required/)
+    assert.match(context.getStatus(), /Vérification requise/)
     assert.equal(timers.size, 0)
     assert.equal(reloads, 0)
     const summary = JSON.parse(
@@ -888,7 +888,7 @@ for (const [mode, beforeChallenge] of [
     )
     assert.equal(summary.opened, beforeChallenge)
     assert.equal(summary.cards.length, beforeChallenge)
-    assert.match(summary.detail, /Verification required/)
+    assert.match(summary.detail, /Vérification requise/)
     const stats = stored.get(`wm_toolbox_pack_stats_v2:${ACCOUNT_A}`)
     assert.equal(stats ? JSON.parse(stats).packs : 0, beforeChallenge)
 
@@ -902,7 +902,7 @@ for (const [mode, beforeChallenge] of [
     assert.equal(requests, beforeChallenge + 1)
     assert.equal(timers.size, 0)
     assert.equal(reloaded.getPrefs().nextAt, 0)
-    assert.match(reloaded.getStatus(), /Verification required/)
+    assert.match(reloaded.getStatus(), /Vérification requise/)
     reloaded.observeNativePack()
     assert.equal(reloaded.getPrefs().verificationRequired, false)
     assert.ok(reloaded.getPrefs().nextAt > Date.now())

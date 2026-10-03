@@ -185,7 +185,7 @@ if (!contentWindow.__wmToolboxContentInstalled) {
           data.source,
           data.compatible === true
             ? null
-            : `${data.source} data format changed; reload the page`,
+            : 'Format des données du jeu modifié ; rechargez la page',
         )
         return
       }
@@ -200,7 +200,7 @@ if (!contentWindow.__wmToolboxContentInstalled) {
       if (data.kind === 'sale-adapter-error') {
         setCompatibilityIssue(
           'sale-ui',
-          'Sale controls changed; Toolbox actions paused',
+          'Commandes de vente modifiées ; actions Toolbox suspendues',
         )
         requireSaleCheck()
         return

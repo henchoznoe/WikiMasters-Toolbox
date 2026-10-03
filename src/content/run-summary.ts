@@ -1,4 +1,5 @@
 import { getAccountId } from './account'
+import { storedMessage } from './presentation'
 import { openPriceInspector } from './price-inspector'
 import {
   type PriceQuote,
@@ -85,7 +86,7 @@ export function captureRunCards(cards: unknown[], pack: number): RunCard[] {
         limitedString(nested.wikipedia_title) ||
         limitedString(nested.title) ||
         limitedString(entry.wikipedia_title) ||
-        'Unknown card',
+        'Carte inconnue',
       rarity:
         identity?.rarity ??
         limitedString(entry.snapshot_rarity) ??
@@ -176,9 +177,9 @@ function priceText(quote: PriceQuote | null): string {
 }
 
 function priceHint(quote: PriceQuote | null): string {
-  if (!quote) return 'No market identifier for this card'
+  if (!quote) return 'Aucun identifiant de marché pour cette carte'
   const presentation = presentPrice(quote)
-  return `${presentation.hint}${presentation.age ? ` · loaded ${presentation.age} ago` : ''}`
+  return `${presentation.hint}${presentation.age ? ` · chargé il y a ${presentation.age}` : ''}`
 }
 
 export function compareRunPrices(
@@ -207,12 +208,12 @@ function observer(): IntersectionObserver {
 function buildRunBody(details: HTMLDetailsElement, summary: RunSummary): void {
   priceObserver?.disconnect()
   const heading = document.createElement('summary')
-  heading.textContent = `Last run · ${summary.opened} pack${summary.opened === 1 ? '' : 's'}${summary.cards.length ? ` · ${summary.cards.length} cards` : ''}`
+  heading.textContent = `Dernière ouverture · ${summary.opened} paquet${summary.opened === 1 ? '' : 's'}${summary.cards.length ? ` · ${summary.cards.length} cartes` : ''}`
   const body = document.createElement('div')
   body.className = 'wm-run-body'
   const meta = document.createElement('p')
   meta.className = 'wm-run-meta'
-  meta.textContent = `${summary.mode === 'auto' ? 'Automatic' : 'Manual'} · ${summary.detail} · ${new Date(summary.finishedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`
+  meta.textContent = `${summary.mode === 'auto' ? 'Automatique' : 'Manuelle'} · ${storedMessage(summary.detail)} · ${new Date(summary.finishedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false })}`
   body.append(meta)
   if (summary.cards.length) {
     const total = document.createElement('p')
@@ -233,7 +234,7 @@ function buildRunBody(details: HTMLDetailsElement, summary: RunSummary): void {
       const title = document.createElement('span')
       title.className = 'wm-run-card-title'
       title.textContent = card.title
-      title.title = `${card.title} · Pack ${card.pack}`
+      title.title = `${card.title} · Paquet ${card.pack}`
       if (summary.opened > 1) {
         const packTag = document.createElement('span')
         packTag.className = 'wm-run-pack-tag'
@@ -292,7 +293,7 @@ export function renderRunSummary(): void {
       const hint = priceHint(quote)
       if (label.title !== hint) label.title = hint
       const spokenPrice =
-        quote?.status === 'available' ? `Average sale price: ${next}` : hint
+        quote?.status === 'available' ? `Prix moyen de vente : ${next}` : hint
       if (label.getAttribute('aria-label') !== spokenPrice)
         label.setAttribute('aria-label', spokenPrice)
       if (quote && 'fetchedAt' in quote)
@@ -319,8 +320,8 @@ export function renderRunSummary(): void {
   const total = details.querySelector<HTMLElement>('.wm-run-total')
   if (!total) return
   const next = knownCount
-    ? `Total: ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(knownTotal)} W · ${knownCount}/${summary.cards.length} priced`
-    : `0/${summary.cards.length} priced`
+    ? `Total : ${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(knownTotal)} W · ${knownCount}/${summary.cards.length} évaluées`
+    : `0/${summary.cards.length} évaluées`
   if (total.textContent !== next) total.textContent = next
 }
 

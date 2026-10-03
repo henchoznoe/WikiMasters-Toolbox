@@ -100,12 +100,12 @@ export function saleBlock(
   commitments: Commitments,
 ): string | null {
   if (!card || !owner || card.ownerId !== owner)
-    return 'Copy no longer owned · refresh collection'
+    return 'Copie non détenue · actualisez la collection'
   if (
     commitments.copyIds.has(card.copyId) ||
     commitments.catalogueIds.has(card.id)
   )
-    return 'Copy in a sale / trade'
+    return 'Copie en vente / échange'
   return null
 }
 export function priceDifference(value: number, quote: PriceQuote): string {
@@ -113,7 +113,7 @@ export function priceDifference(value: number, quote: PriceQuote): string {
     return '—'
   const delta = value - quote.average
   const sign = delta > 0 ? '+' : ''
-  return `${sign}${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(delta)} W${quote.average > 0 ? ` · ${sign}${((delta / quote.average) * 100).toFixed(1)}%` : ''}`
+  return `${sign}${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(delta)} W${quote.average > 0 ? ` · ${sign}${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format((delta / quote.average) * 100)} %` : ''}`
 }
 export const SALE_DURATIONS = [10, 30, 60, 180, 360, 720] as const
 export function validSaleDraft(amount: number, duration: number): boolean {

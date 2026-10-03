@@ -1,5 +1,8 @@
 import { onAccountChange, setAccountId } from './account'
 
+class SessionExpiredError extends Error {}
+class GameResponseError extends Error {}
+
 const MAX_REQUESTS = 200
 let notify: () => void = () => {}
 export function setRequestCallback(callback: () => void): void {
@@ -51,9 +54,9 @@ export function requestLimit(): string {
   const now = Date.now()
   requests = requests.filter(at => at > now - 3600_000)
   return cooldown > now
-    ? `Server pause · ${Math.ceil((cooldown - now) / 1000)} s`
+    ? `Pause serveur · ${Math.ceil((cooldown - now) / 1000)} s`
     : requests.length >= MAX_REQUESTS
-      ? '200 requests / hour reached'
+      ? 'Limite de 200 requêtes / heure atteinte'
       : ''
 }
 export function scheduleRead(
@@ -136,7 +139,7 @@ export function getRequestEpoch(): number {
 }
 export function cancelRequests(): void {
   epoch += 1
-  scope.abort(new Error('Page or account changed'))
+  scope.abort(new Error('Page ou compte modifié'))
   scope = new AbortController()
   if (timer) clearTimeout(timer)
   timer = null
@@ -158,13 +161,13 @@ export async function requestData(
   const request = new AbortController()
   const current = scope.signal
   const sources = [current, ...(signal ? [signal] : [])]
-  const abort = (): void => request.abort(new Error('Request stopped'))
+  const abort = (): void => request.abort(new Error('Requête arrêtée'))
   for (const source of sources) {
     if (source.aborted) abort()
     source.addEventListener('abort', abort, { once: true })
   }
   const timeout = setTimeout(
-    () => request.abort(new Error('Request timed out')),
+    () => request.abort(new Error('Délai de requête dépassé')),
     12_000,
   )
   try {
@@ -197,7 +200,7 @@ export async function requestData(
       saveBudget()
       if (response.status === 401) {
         setAccountId(null)
-        throw new Error('Session expired')
+        throw new SessionExpiredError('Session expirée')
       }
       // The timeout covers decoding too. Recheck scope when a fetch implementation ignores abort.
       let json: unknown
@@ -205,7 +208,9 @@ export async function requestData(
         json = await response.json()
       } catch {
         if (response.ok)
-          throw new Error('Game response changed; reload the page')
+          throw new GameResponseError(
+            'Réponse du jeu modifiée ; rechargez la page',
+          )
         json = null
       }
       if (request.signal.aborted) throw request.signal.reason
@@ -265,11 +270,11 @@ export function requestJson(
       signal?.removeEventListener('abort', stop)
       current.clients.delete(client)
       if (!current.clients.size)
-        current.controller.abort(new Error('Read stopped'))
+        current.controller.abort(new Error('Lecture arrêtée'))
     }
     const stop = (): void => {
       finish()
-      reject(signal?.reason ?? new Error('Stopped'))
+      reject(signal?.reason ?? new Error('Arrêté'))
     }
     signal?.addEventListener('abort', stop, { once: true })
     current.promise.then(
@@ -294,7 +299,8 @@ export async function requestReadData(
   const sequence = ++readSequence
   let failure: unknown
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    if (signal?.aborted || expected !== epoch) throw new Error('Read stopped')
+    if (signal?.aborted || expected !== epoch)
+      throw new Error('Lecture arrêtée')
     let result: { response: Response; json: unknown } | undefined
     let transportFailure = false
     await scheduleRead(
@@ -306,24 +312,25 @@ export async function requestReadData(
         } catch (cause) {
           failure = cause
           transportFailure = !(
-            cause instanceof Error &&
-            /^(Session|Game response)/.test(cause.message)
+            cause instanceof SessionExpiredError ||
+            cause instanceof GameResponseError
           )
         }
       },
       signal,
     )
-    if (signal?.aborted || expected !== epoch) throw new Error('Read stopped')
+    if (signal?.aborted || expected !== epoch)
+      throw new Error('Lecture arrêtée')
     if (result) return result
     if (!transportFailure)
       throw (
         failure ??
-        new RequestAdmissionError(requestLimit() || 'Read queue is full')
+        new RequestAdmissionError(requestLimit() || 'File de lectures pleine')
       )
     if (attempt === 2 || requestLimit()) break
     onRetry?.()
   }
-  throw failure ?? new Error('Read unavailable')
+  throw failure ?? new Error('Lecture indisponible')
 }
 async function readJson(
   url: string,
@@ -333,7 +340,7 @@ async function readJson(
   const { response, json } = await requestReadData(url, signal, onRetry)
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   if (!json || typeof json !== 'object' || Array.isArray(json))
-    throw new Error('Game response changed; reload the page')
+    throw new GameResponseError('Réponse du jeu modifiée ; rechargez la page')
   return json as Record<string, unknown>
 }
 
@@ -360,7 +367,8 @@ export async function requestWrite(
     signal,
   )
   if (failure) throw failure
-  if (!result) throw new Error(requestLimit() || 'Write stopped before sending')
+  if (!result)
+    throw new Error(requestLimit() || 'Écriture arrêtée avant l’envoi')
   return result
 }
 

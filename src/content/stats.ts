@@ -128,7 +128,7 @@ export function renderStats(): void {
   if (!getAccountId()) {
     const message = document.createElement('p')
     message.className = 'wm-stats-pending'
-    message.textContent = 'Waiting for your WikiMasters account…'
+    message.textContent = 'En attente de votre compte WikiMasters…'
     container.replaceChildren(message)
     return
   }
@@ -139,10 +139,10 @@ export function renderStats(): void {
   )
   const title = document.createElement('h3')
   title.className = 'wm-stats-title'
-  title.textContent = 'Pack statistics'
+  title.textContent = 'Statistiques des paquets'
   const summary = document.createElement('p')
   summary.className = 'wm-stats-summary'
-  summary.textContent = `${stats.packs} pack${stats.packs === 1 ? '' : 's'} · ${total} card${total === 1 ? '' : 's'}`
+  summary.textContent = `${stats.packs} paquet${stats.packs === 1 ? '' : 's'} · ${total} carte${total === 1 ? '' : 's'}`
   const head = document.createElement('div')
   head.className = 'wm-stats-head'
   head.append(title, summary)
@@ -155,7 +155,7 @@ export function renderStats(): void {
     tile.dataset.rarity = rarity.toLowerCase()
     const label = document.createElement('span')
     label.className = 'wm-stat-label'
-    label.textContent = rarity
+    label.textContent = rarity === 'Other' ? 'Autres' : rarity
     const count = document.createElement('span')
     count.className = 'wm-stat-count'
     count.textContent = String(stats.counts[rarity])
@@ -167,7 +167,7 @@ export function renderStats(): void {
   const dailyLabel = document.createElement('label')
   dailyLabel.className = 'wm-setting-toggle'
   dailyLabel.title =
-    'Reset at local midnight, or on the next visit if Chrome is closed'
+    'Réinitialisation à minuit local, ou à la prochaine visite si Chrome est fermé'
   const dailyToggle = document.createElement('input')
   dailyToggle.type = 'checkbox'
   dailyToggle.checked = stats.dailyReset
@@ -184,14 +184,15 @@ export function renderStats(): void {
   dailyLabel.append(
     dailyToggle,
     dailyTrack,
-    document.createTextNode('Daily reset'),
+    document.createTextNode('Réinitialisation quotidienne'),
   )
   const resetButton = document.createElement('button')
   resetButton.type = 'button'
   resetButton.className = 'wm-quiet-button'
-  resetButton.textContent = 'Reset'
+  resetButton.textContent = 'Réinitialiser'
   resetButton.addEventListener('click', () => {
-    if (!window.confirm('Reset all pack statistics?')) return
+    if (!window.confirm('Réinitialiser toutes les statistiques des paquets ?'))
+      return
     void updateStats(current => emptyStats(current.dailyReset))
   })
   controls.append(dailyLabel, resetButton)

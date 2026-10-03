@@ -77,7 +77,7 @@ test('selection spans every copy and keeps separate rarities and shiny variants'
   assert.deepEqual(ids(plan.cards), ['copy-1', 'copy-3'])
   assert.equal(plan.groups.length, 2)
   assert.ok(plan.groups.every(group => group.before === 2 && group.after === 1))
-  assert.equal(plan.blocked.get('copy-4'), 'Only copy')
+  assert.equal(plan.blocked.get('copy-4'), 'Copie unique')
 })
 
 test('favorites, tags, sale copies and catalogue trades are retained before keep N', async () => {
@@ -97,10 +97,10 @@ test('favorites, tags, sale copies and catalogue trades are retained before keep
   }
   const plan = c.buildSelection(cards, c.rules, commitments)
   assert.deepEqual(ids(plan.cards), ['copy-3'])
-  assert.equal(plan.blocked.get('copy-0'), 'Favorite')
-  assert.equal(plan.blocked.get('copy-1'), 'Tagged')
-  assert.equal(plan.blocked.get('copy-2'), 'Sale / trade')
-  assert.equal(plan.blocked.get('copy-4'), 'Sale / trade')
+  assert.equal(plan.blocked.get('copy-0'), 'Favori')
+  assert.equal(plan.blocked.get('copy-1'), 'Avec étiquette')
+  assert.equal(plan.blocked.get('copy-2'), 'Vente / échange')
+  assert.equal(plan.blocked.get('copy-4'), 'Vente / échange')
   assert.equal(plan.groups[0].after, 3)
 })
 
@@ -265,7 +265,7 @@ test('collection or protection changes after preview prevent writes', async () =
   mutable[1].starred = true
   await c.executeDiscard()
   assert.equal(writes.length, 0)
-  assert.match(c.getSelectionState().error, /Collection changed/)
+  assert.match(c.getSelectionState().error, /Collection modifiée/)
   let committed = false
   const second = await actions({
     guards: async url =>
@@ -280,7 +280,10 @@ test('collection or protection changes after preview prevent writes', async () =
   committed = true
   await second.context.executeDiscard()
   assert.equal(second.writes.length, 0)
-  assert.match(second.context.getSelectionState().error, /Protections changed/)
+  assert.match(
+    second.context.getSelectionState().error,
+    /Protections modifiées/,
+  )
 })
 
 test('stop waits for the in-flight result and prevents the next copy', async () => {
@@ -379,14 +382,14 @@ test('unavailable or occupied browser locks prevent writes', async () => {
   await prepare(c)
   await c.executeDiscard()
   assert.equal(writes.length, 0)
-  assert.match(c.getSelectionState().error, /locking/)
+  assert.match(c.getSelectionState().error, /verrouillage/)
   const second = await actions()
   await prepare(second.context)
   second.context.navigator.locks.request = async (_key, _options, fn) =>
     fn(null)
   await second.context.executeDiscard()
   assert.equal(second.writes.length, 0)
-  assert.match(second.context.getSelectionState().error, /another tab/)
+  assert.match(second.context.getSelectionState().error, /autre onglet/)
 })
 
 test('selection checks every page and keeps the retained minimum beyond the visible page', async () => {
@@ -439,5 +442,8 @@ test('unavailable receipt storage prevents a destructive request', async () => {
   }
   await c.executeDiscard()
   assert.equal(writes.length, 0)
-  assert.match(c.getSelectionState().error, /saved locally/)
+  assert.match(
+    c.getSelectionState().error,
+    /enregistrer le résultat localement/,
+  )
 })

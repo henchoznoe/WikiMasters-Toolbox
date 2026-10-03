@@ -54,17 +54,17 @@ export function openPriceInspector(
   const dialog = document.createElement('section')
   dialog.className = 'wm-price-inspector'
   dialog.setAttribute('role', 'dialog')
-  dialog.setAttribute('aria-label', `Prices · ${title}`)
+  dialog.setAttribute('aria-label', `Prix · ${title}`)
   const header = document.createElement('div')
   header.className = 'wm-price-inspector-header'
   const heading = document.createElement('h2')
   heading.textContent = title
-  const close = button('×', 'Close price details', closePriceInspector)
+  const close = button('×', 'Fermer le détail des prix', closePriceInspector)
   header.append(heading, close)
   const rarities = document.createElement('div')
   rarities.className = 'wm-price-rarities'
   for (const r of RARITIES) {
-    const control = button('', `Prices for ${r}`, () => {
+    const control = button('', `Prix pour ${r}`, () => {
       if (selected) selected.rarity = r
       renderPriceInspector()
     })
@@ -82,7 +82,7 @@ export function openPriceInspector(
   const actions = document.createElement('div')
   actions.className = 'wm-collection-actions'
   actions.append(
-    button('↻', 'Refresh this card · one attempt per minute', () => {
+    button('↻', 'Actualiser cette carte · une tentative par minute', () => {
       void requestPriceQuote(id, true)
     }),
   )
@@ -90,12 +90,12 @@ export function openPriceInspector(
   const alert = document.createElement('details')
   alert.className = 'wm-price-method'
   const alertHeading = document.createElement('summary')
-  alertHeading.textContent = 'Price alert · native rarity average'
+  alertHeading.textContent = 'Alerte de prix · moyenne native par rareté'
   const direction = document.createElement('select')
-  direction.setAttribute('aria-label', 'Price alert direction')
+  direction.setAttribute('aria-label', 'Sens de l’alerte de prix')
   for (const [value, label] of [
-    ['above', 'Crosses above ≥'],
-    ['below', 'Crosses below ≤'],
+    ['above', 'Franchit à la hausse ≥'],
+    ['below', 'Franchit à la baisse ≤'],
   ]) {
     const option = document.createElement('option')
     option.value = value
@@ -106,36 +106,40 @@ export function openPriceInspector(
   threshold.type = 'number'
   threshold.min = '0'
   threshold.step = 'any'
-  threshold.setAttribute('aria-label', 'Price alert threshold (W)')
+  threshold.setAttribute('aria-label', 'Seuil de l’alerte de prix (W)')
   const alertStatus = document.createElement('p')
   alertStatus.className = 'wm-note'
   alertStatus.setAttribute('role', 'status')
-  const saveAlert = button('Save alert', 'Save alert for this rarity', () => {
-    if (!selected) return
-    const quote = readPriceQuote(selected.id, selected.rarity)
-    alertStatus.textContent = setPriceAlert({
-      id: selected.id,
-      rarity: selected.rarity,
-      threshold: Number(threshold.value),
-      direction: direction.value === 'below' ? 'below' : 'above',
-      previous:
-        quote.status === 'available' && !quote.stale && !quote.failed
-          ? quote.average
-          : null,
-      at: Date.now(),
-    })
-    removeAlert.disabled = !readPriceAlerts().rules.some(
-      row => row.id === selected?.id && row.rarity === selected?.rarity,
-    )
-  })
+  const saveAlert = button(
+    'Enregistrer l’alerte',
+    'Enregistrer l’alerte pour cette rareté',
+    () => {
+      if (!selected) return
+      const quote = readPriceQuote(selected.id, selected.rarity)
+      alertStatus.textContent = setPriceAlert({
+        id: selected.id,
+        rarity: selected.rarity,
+        threshold: Number(threshold.value),
+        direction: direction.value === 'below' ? 'below' : 'above',
+        previous:
+          quote.status === 'available' && !quote.stale && !quote.failed
+            ? quote.average
+            : null,
+        at: Date.now(),
+      })
+      removeAlert.disabled = !readPriceAlerts().rules.some(
+        row => row.id === selected?.id && row.rarity === selected?.rarity,
+      )
+    },
+  )
   const removeAlert = button(
-    'Remove alert',
-    'Remove alert for this rarity',
+    'Supprimer l’alerte',
+    'Supprimer l’alerte pour cette rareté',
     () => {
       if (selected)
         alertStatus.textContent = removePriceAlert(selected.id, selected.rarity)
-          ? 'Alert removed'
-          : 'Alert storage unavailable'
+          ? 'Alerte supprimée'
+          : 'Stockage des alertes indisponible'
       removeAlert.disabled = !readPriceAlerts().rules.some(
         row => row.id === selected?.id && row.rarity === selected?.rarity,
       )
@@ -150,10 +154,10 @@ export function openPriceInspector(
     saveAlert.disabled = shiny || !getAccountId()
     removeAlert.disabled = !saved
     alertStatus.textContent = shiny
-      ? 'Shiny price unavailable · no alert inferred'
+      ? 'Prix des brillantes indisponible · aucune alerte déduite'
       : !getAccountId()
-        ? 'Sign in to save alerts'
-        : 'Fresh Toolbox observations only · no polling · first known read establishes a baseline; no-sales gaps reset it.'
+        ? 'Connectez-vous pour enregistrer des alertes'
+        : 'Observations fraîches de Toolbox uniquement · aucune surveillance continue · la première lecture connue établit la référence ; l’absence de données de vente la réinitialise.'
   }
   alert.addEventListener('toggle', syncAlert)
   rarities.addEventListener('click', syncAlert)
@@ -169,13 +173,13 @@ export function openPriceInspector(
   const method = document.createElement('details')
   method.className = 'wm-price-method'
   const summary = document.createElement('summary')
-  summary.textContent = 'Method'
+  summary.textContent = 'Méthode'
   method.append(summary)
   for (const text of [
-    'Average: WikiMasters summary for this rarity, source window and volume unknown. Age: when checked, not when sold. Shiny premium is not exposed. Album freshness: 24 h; sale/trade: 15 min. Refresh preserves the original age on failure. Local graph: one average observation per UTC day, last 90 days; missing days are gaps.',
-    'Sales sample: explicit settled_sold results with final amount, auction end time, snapshot rarity and shiny status, from free native history or visited auctions. One result per auction, same catalogue ID, rarity and shiny status. Last 30 days by auction end time; up to 1,000 results per account.',
-    'Median: at least 5 sales on 3 distinct UTC end days. Indicative Q1–Q3 range: at least 10 sales on 3 days, linear interpolation, middle half of observed prices. Extremes: outside Q1 − 1.5×IQR / Q3 + 1.5×IQR; they remain in the median.',
-    'These are minimum display thresholds, not proof of market coverage. The observed volume is incomplete. Selection can be biased: the range is not a confidence interval or a prediction.',
+    'Moyenne : récapitulatif WikiMasters pour cette rareté, période et volume inconnus. Âge : date de lecture, pas de vente. La surcote des brillantes n’est pas exposée. Fraîcheur : 24 h pour l’album ; 15 min pour la vente / l’échange. L’âge original est conservé si l’actualisation échoue. Graphique local : une moyenne observée par jour UTC sur les 90 derniers jours ; les jours absents restent des trous.',
+    'Échantillon de ventes : ventes explicitement conclues avec montant final, fin d’enchère, rareté et variante brillante au moment de la vente, issues de l’historique natif gratuit ou des enchères consultées. Un résultat par enchère, pour le même ID du catalogue, la même rareté et la même variante brillante. Les 30 derniers jours selon la fin d’enchère ; jusqu’à 1 000 résultats par compte.',
+    'Médiane : au moins 5 ventes conclues sur 3 jours UTC distincts. Fourchette indicative Q1–Q3 : au moins 10 ventes sur 3 jours, interpolation linéaire, moitié centrale des prix observés. Valeurs extrêmes : hors de Q1 − 1,5×écart interquartile / Q3 + 1,5×écart interquartile ; elles restent dans le calcul de la médiane.',
+    'Ces seuils minimaux permettent l’affichage sans prouver la couverture du marché. Le volume observé est incomplet. L’échantillon peut être biaisé : la fourchette n’est ni un intervalle de confiance ni une prédiction.',
   ]) {
     const explanation = document.createElement('p')
     explanation.className = 'wm-note'
@@ -225,7 +229,7 @@ function graph(points: Observation[]): SVGSVGElement {
   svg.setAttribute('role', 'img')
   svg.setAttribute(
     'aria-label',
-    'Local average price observations; missing days are gaps',
+    'Observations locales du prix moyen ; les jours manquants restent des trous',
   )
   const actual = points.filter(point => point.average !== null)
   const first = points[0]?.at ?? Date.now()
@@ -263,7 +267,7 @@ function graph(points: Observation[]): SVGSVGElement {
     circle.setAttribute('r', '3')
     circle.setAttribute('fill', 'currentColor')
     const title = document.createElementNS(ns, 'title')
-    title.textContent = `${new Date(point.at).toLocaleString()} · ${point.average} W`
+    title.textContent = `${new Date(point.at).toLocaleString('fr-FR')} · ${point.average} W`
     circle.append(title)
     svg.append(circle)
     previous = point
@@ -282,7 +286,7 @@ export function renderPriceInspector(): void {
     refresh.disabled = !canRefreshPrice(id)
     refresh.textContent =
       context === 'decision' && priceTooOld(quote, context)
-        ? '↻ Refresh before decision'
+        ? '↻ Actualiser avant de décider'
         : '↻'
   }
   const presentation = presentPrice(quote, context)
@@ -302,18 +306,18 @@ export function renderPriceInspector(): void {
   if (sample) {
     const estimate = estimateSales(readSaleSamples(), { id, rarity, shiny })
     const money = (value: number) =>
-      new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)
+      new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(value)
     const lines = [
-      `Observed concluded sales · ${rarity} · ${shiny ? 'shiny' : 'normal'} · ${estimate.count} / 30 days · ${estimate.days} UTC days`,
+      `Ventes conclues observées · ${rarity} · ${shiny ? 'brillante' : 'normale'} · ${estimate.count} / 30 jours · ${estimate.days} jours UTC`,
       estimate.median === null
-        ? 'Median — · needs 5 sales on 3 distinct days'
-        : `Local median ${money(estimate.median)} W · ${estimate.extremes} extreme values retained`,
+        ? 'Médiane — · nécessite 5 ventes sur 3 jours distincts'
+        : `Médiane locale ${money(estimate.median)} W · ${estimate.extremes} valeurs extrêmes conservées`,
       estimate.range
-        ? `Indicative Q1–Q3: ${money(estimate.range[0])}–${money(estimate.range[1])} W · incomplete sample`
-        : 'Range — · needs 10 sales on 3 distinct days',
+        ? `Fourchette indicative Q1–Q3 : ${money(estimate.range[0])}–${money(estimate.range[1])} W · échantillon incomplet`
+        : 'Fourchette — · nécessite 10 ventes sur 3 jours distincts',
       estimate.oldest && estimate.newest
-        ? `Auction ends: ${new Date(estimate.oldest).toLocaleDateString()} – ${new Date(estimate.newest).toLocaleDateString()} · latest ${new Date(estimate.newest).toLocaleString()}`
-        : 'Observe free market history / concluded listings to build a sample',
+        ? `Fins d’enchères : ${new Date(estimate.oldest).toLocaleDateString('fr-FR')} – ${new Date(estimate.newest).toLocaleDateString('fr-FR')} · dernière le ${new Date(estimate.newest).toLocaleString('fr-FR')}`
+        : 'Consultez l’historique gratuit du marché / les ventes conclues pour constituer un échantillon',
     ]
     const signature = JSON.stringify(lines)
     if (sample.dataset.signature !== signature) {
@@ -348,8 +352,8 @@ export function renderPriceInspector(): void {
     const gaps = span - points.length
     const unpriced = points.length - known.length
     caption.textContent = points.length
-      ? `${points.length} local observation${points.length === 1 ? '' : 's'}${gaps ? ` · ${gaps} missing days` : ''}${unpriced ? ` · ${unpriced} without sales` : ''} · ${new Date(points[0].at).toLocaleDateString()} – ${new Date(points.at(-1)?.at ?? 0).toLocaleDateString()}${known.length ? ` · ${Math.min(...known)}–${Math.max(...known)} W` : ''}`
-      : 'No local observations yet'
+      ? `${points.length} observation${points.length === 1 ? '' : 's'} locale${points.length === 1 ? '' : 's'}${gaps ? ` · ${gaps} jours manquants` : ''}${unpriced ? ` · ${unpriced} sans données de vente` : ''} · ${new Date(points[0].at).toLocaleDateString('fr-FR')} – ${new Date(points.at(-1)?.at ?? 0).toLocaleDateString('fr-FR')}${known.length ? ` · ${Math.min(...known)}–${Math.max(...known)} W` : ''}`
+      : 'Aucune observation locale pour le moment'
     history.append(caption)
   }
 }

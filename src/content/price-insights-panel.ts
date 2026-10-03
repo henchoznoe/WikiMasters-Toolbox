@@ -53,29 +53,29 @@ function replace(body: HTMLElement, key: string, build: () => Node[]): void {
 export function createPriceInsights(): HTMLElement {
   const body = document.createElement('div')
   body.className = 'wm-price-insights'
-  const alerts = section('Price alerts', 'alerts')
+  const alerts = section('Alertes de prix', 'alerts')
   const alertBody = document.createElement('div')
   alertBody.dataset.priceAlertsBody = '1'
-  const clear = button('Clear notifications', () => {
+  const clear = button('Effacer les notifications', () => {
     const result = clearPriceAlertEvents()
-    clear.title = result ? '' : 'Alert storage unavailable'
+    clear.title = result ? '' : 'Stockage des alertes indisponible'
     renderPriceInsights()
   })
   clear.dataset.priceAlertsClear = '1'
   alerts.append(
     note(
-      'Set a threshold in card price details. Fresh Toolbox reads only · no background polling.',
+      'Choisissez un seuil dans le détail du prix d’une carte. Lectures fraîches de Toolbox uniquement · aucune surveillance en arrière-plan.',
     ),
     clear,
     alertBody,
   )
-  const diagnostics = section('Missing prices', 'diagnostics')
+  const diagnostics = section('Prix manquants', 'diagnostics')
   const scope = document.createElement('select')
   scope.dataset.priceDiagnosticScope = '1'
-  scope.setAttribute('aria-label', 'Missing price scope')
+  scope.setAttribute('aria-label', 'Périmètre des prix manquants')
   for (const [value, label] of [
-    ['page', 'Cards on this page'],
-    ['collection', 'Loaded collection'],
+    ['page', 'Cartes de cette page'],
+    ['collection', 'Collection chargée'],
   ]) {
     const option = document.createElement('option')
     option.value = value
@@ -84,12 +84,12 @@ export function createPriceInsights(): HTMLElement {
   }
   const filter = document.createElement('select')
   filter.dataset.priceDiagnosticFilter = '1'
-  filter.setAttribute('aria-label', 'Missing price reason')
+  filter.setAttribute('aria-label', 'Cause du prix manquant')
   for (const [value, label] of [
-    ['all', 'All reasons'],
-    ['no-sales', 'No sales data'],
-    ['not-found', 'Not found'],
-    ['error', 'Error / paused'],
+    ['all', 'Toutes les causes'],
+    ['no-sales', 'Aucune donnée de vente'],
+    ['not-found', 'Introuvable'],
+    ['error', 'Erreur / pause'],
   ]) {
     const option = document.createElement('option')
     option.value = value
@@ -98,7 +98,7 @@ export function createPriceInsights(): HTMLElement {
   }
   const list = document.createElement('div')
   list.dataset.priceDiagnosticsBody = '1'
-  const retry = button('Retry filtered · max 10', () => {
+  const retry = button('Relancer les prix filtrés · max 10', () => {
     const cards =
       scope.value === 'collection'
         ? getCollectionState().cards
@@ -114,7 +114,7 @@ export function createPriceInsights(): HTMLElement {
     filter,
     retry,
     note(
-      'No sales data: this rarity is absent from the native summary. Not found: catalogue endpoint returned 404. Error: failed read, failed refresh or request pause. Retry uses Prices progress / Stop, ≥1 min per card and the shared budget.',
+      'Aucune donnée de vente : rareté absente du récapitulatif natif. Introuvable : réponse 404 du catalogue. Erreur : lecture ou actualisation échouée, ou requêtes suspendues. La relance utilise la progression et le bouton « Arrêter » du panneau Prix, avec ≥1 min par carte et le budget commun.',
     ),
     list,
   )
@@ -126,16 +126,16 @@ export function createPriceInsights(): HTMLElement {
     list.dataset.page = '0'
     renderPriceInsights()
   })
-  const dashboard = section('Market dashboard · local', 'dashboard')
+  const dashboard = section('Tableau de bord du marché · local', 'dashboard')
   const dashboardBody = document.createElement('div')
   dashboardBody.dataset.priceDashboardBody = '1'
   dashboard.append(
     note(
-      'Public cached references, up to 30 days old · incomplete coverage. Amounts are sums of rarity averages per catalogue, not turnover or concluded sales. History: observed UTC days / 90 days; gaps are not interpolated. Shiny premiums unavailable.',
+      'Références publiques en cache, datant de 30 jours au plus · couverture incomplète. Les montants additionnent les moyennes par rareté du catalogue, sans représenter un chiffre d’affaires ni des ventes conclues. Historique : jours UTC observés sur 90 jours ; aucune interpolation des trous. Surcote des brillantes indisponible.',
     ),
     dashboardBody,
   )
-  const comparisons = section('Listing vs average', 'comparison')
+  const comparisons = section('Annonce / moyenne', 'comparison')
   const comparisonBody = document.createElement('div')
   comparisonBody.dataset.priceComparisonBody = '1'
   comparisons.append(comparisonBody)
@@ -166,7 +166,7 @@ export function renderPriceInsights(): void {
     replace(comparisonBody, JSON.stringify(rows), () => {
       const nodes: Node[] = [
         note(
-          `${rows.length} observed listings · latest page only · amounts from the last native read${rows.length > 10 ? ' · first 10 shown' : ''}`,
+          `${rows.length} annonces observées · dernière page uniquement · montants de la dernière lecture native${rows.length > 10 ? ' · 10 premières affichées' : ''}`,
         ),
       ]
       for (const { row, text, hint } of rows.slice(0, 10)) {
@@ -185,7 +185,7 @@ export function renderPriceInsights(): void {
       if (!rows.length)
         nodes.push(
           note(
-            'Listing metadata unavailable · open an announcement; no amount inferred from the page text.',
+            'Données de l’annonce indisponibles · ouvrez une annonce ; aucun montant n’est déduit du texte de la page.',
           ),
         )
       return nodes
@@ -195,30 +195,30 @@ export function renderPriceInsights(): void {
   const state = readPriceAlerts()
   const pricesSummary = root.querySelector('[data-price-controls-summary]')
   if (pricesSummary)
-    pricesSummary.textContent = `Prices${state.events.length ? ` · ${state.events.length} alerts` : ''}`
+    pricesSummary.textContent = `Prix${state.events.length ? ` · ${state.events.length} alertes` : ''}`
   const clear = root.querySelector<HTMLButtonElement>(
     '[data-price-alerts-clear]',
   )
   if (clear) clear.disabled = state.events.length === 0
   const summary = root.querySelector('[data-price-insights="alerts"] summary')
   if (summary)
-    summary.textContent = `Price alerts${state.events.length ? ` · ${state.events.length}` : ''}`
+    summary.textContent = `Alertes de prix${state.events.length ? ` · ${state.events.length}` : ''}`
   if (alerts?.parentElement?.hasAttribute('open'))
     replace(alerts, JSON.stringify(state), () => {
       const nodes: Node[] = [
         note(
-          `${state.rules.length} / 50 alerts · ${state.events.length} notifications / 30 days${state.warning ? ` · ${state.warning}` : ''}`,
+          `${state.rules.length} / 50 alertes · ${state.events.length} notifications / 30 jours${state.warning ? ` · ${state.warning}` : ''}`,
         ),
       ]
       for (const event of state.events.slice(-10).reverse())
         nodes.push(
           note(
-            `${event.id} · ${event.rarity} · ${event.direction === 'above' ? '≥' : '≤'} ${event.threshold} W · observed ${event.average} W · ${formatPriceAge(event.at)}`,
-            new Date(event.at).toLocaleString(),
+            `${event.id} · ${event.rarity} · ${event.direction === 'above' ? '≥' : '≤'} ${event.threshold} W · observé ${event.average} W · ${formatPriceAge(event.at)}`,
+            new Date(event.at).toLocaleString('fr-FR'),
           ),
         )
       if (state.events.length > 10)
-        nodes.push(note('Latest 10 notifications shown'))
+        nodes.push(note('10 dernières notifications affichées'))
       for (const rule of state.rules) {
         const row = document.createElement('div')
         row.className = 'wm-market-row'
@@ -226,12 +226,12 @@ export function renderPriceInsights(): void {
           note(
             `${rule.id} · ${rule.rarity} · ${rule.direction === 'above' ? '≥' : '≤'} ${rule.threshold} W`,
           ),
-          button('Details', () =>
+          button('Détails', () =>
             openPriceInspector(rule.id, rule.rarity, rule.id),
           ),
-          button('Remove', () => {
+          button('Supprimer', () => {
             if (!removePriceAlert(rule.id, rule.rarity))
-              row.append(note('Alert storage unavailable'))
+              row.append(note('Stockage des alertes indisponible'))
             renderPriceInsights()
           }),
         )
@@ -275,7 +275,7 @@ export function renderPriceInsights(): void {
       () => {
         const nodes: Node[] = [
           note(
-            `${rows.length} variants${scope === 'collection' && getCollectionState().status !== 'complete' ? ' · partial index' : ''} · unloaded prices are not failures`,
+            `${rows.length} variantes${scope === 'collection' && getCollectionState().status !== 'complete' ? ' · index partiel' : ''} · les prix non chargés ne sont pas des échecs`,
           ),
         ]
         for (const row of rows.slice(page * 10, page * 10 + 10)) {
@@ -283,15 +283,15 @@ export function renderPriceInsights(): void {
           node.className = 'wm-market-row'
           const label =
             row.reason === 'error'
-              ? 'Error / paused'
+              ? 'Erreur / pause'
               : row.reason === 'no-sales'
-                ? 'No sales data'
-                : 'Not found'
+                ? 'Aucune donnée de vente'
+                : 'Introuvable'
           node.append(
             note(row.card.title),
             createRarityBadge(row.card.rarity ?? '?'),
             note(label, presentPrice(row.quote).hint),
-            button('Details', () =>
+            button('Détails', () =>
               openPriceInspector(
                 row.card.id,
                 row.card.rarity ?? 'C',
@@ -314,8 +314,11 @@ export function renderPriceInsights(): void {
         })
         previous.disabled = page === 0
         next.disabled = page + 1 >= pages
-        previous.setAttribute('aria-label', 'Previous missing prices page')
-        next.setAttribute('aria-label', 'Next missing prices page')
+        previous.setAttribute(
+          'aria-label',
+          'Page précédente des prix manquants',
+        )
+        next.setAttribute('aria-label', 'Page suivante des prix manquants')
         navigation.append(previous, note(`${page + 1} / ${pages}`), next)
         nodes.push(navigation)
         return nodes
@@ -333,22 +336,22 @@ export function renderPriceInsights(): void {
   const data = priceDashboard(ids, readPriceQuote, readPriceHistory)
   replace(dashboard, JSON.stringify(data), () => {
     const nodes: Node[] = [
-      note(`${ids.length} retained catalogue IDs · shared between accounts`),
+      note(`${ids.length} ID du catalogue conservés · partagés entre comptes`),
     ]
     const table = document.createElement('table')
     table.className = 'wm-price-dashboard-table'
     const caption = document.createElement('caption')
-    caption.textContent = 'Cached rarity references'
+    caption.textContent = 'Références par rareté en cache'
     table.append(caption)
     const head = table.createTHead().insertRow()
     for (const label of [
-      'Rarity',
-      'Known',
-      'Sum W',
-      'Old / failed',
-      'No sales',
-      'Error / 404',
-      'Unloaded',
+      'Rareté',
+      'Connus',
+      'Somme W',
+      'Anciens / échecs',
+      'Aucune vente',
+      'Erreur / 404',
+      'Non chargés',
     ]) {
       const cell = document.createElement('th')
       cell.scope = 'col'
@@ -364,7 +367,7 @@ export function renderPriceInsights(): void {
       tr.append(rarityCell)
       for (const value of [
         row.known,
-        row.sum.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+        row.sum.toLocaleString('fr-FR', { maximumFractionDigits: 2 }),
         row.stale,
         row.missing,
         row.errors,
@@ -374,7 +377,7 @@ export function renderPriceInsights(): void {
     }
     nodes.push(
       table,
-      note('Often without price · at least 3 observed days · top 10'),
+      note('Souvent sans prix · au moins 3 jours observés · 10 premiers'),
     )
     const histories = data.flatMap(row => row.histories)
     for (const row of histories
@@ -389,11 +392,13 @@ export function renderPriceInsights(): void {
         historyRow(
           row.id,
           row.rarity,
-          `${row.missing} / ${row.observed} days without sales data`,
+          `${row.missing} / ${row.observed} jours sans données de vente`,
         ),
       )
     nodes.push(
-      note('Local evolution · latest 10 variants with ≥2 known observations'),
+      note(
+        'Évolution locale · 10 dernières variantes avec ≥2 observations connues',
+      ),
     )
     for (const row of histories
       .filter(row => row.delta !== null)
@@ -403,12 +408,12 @@ export function renderPriceInsights(): void {
         historyRow(
           row.id,
           row.rarity,
-          `${row.first?.average} → ${row.last?.average} W · ${(row.delta ?? 0) > 0 ? '+' : ''}${row.delta?.toLocaleString()} W · ${new Date(row.first?.at ?? 0).toLocaleDateString()} → ${new Date(row.last?.at ?? 0).toLocaleDateString()} · ${row.gaps} unobserved days · ${row.missing} no-sales days`,
+          `${row.first?.average} → ${row.last?.average} W · ${(row.delta ?? 0) > 0 ? '+' : ''}${row.delta?.toLocaleString('fr-FR')} W · ${new Date(row.first?.at ?? 0).toLocaleDateString('fr-FR')} → ${new Date(row.last?.at ?? 0).toLocaleDateString('fr-FR')} · ${row.gaps} jours non observés · ${row.missing} jours sans données de vente`,
         ),
       )
     nodes.push(
       note(
-        'Evolution compares the first and last actual observations, not sale results; open Details for the graph and gaps.',
+        'L’évolution compare la première et la dernière observation réelle, pas des résultats de vente ; ouvrez « Détails » pour le graphique et les trous.',
       ),
     )
     return nodes
@@ -421,7 +426,7 @@ function historyRow(id: string, rarity: string, text: string): HTMLElement {
     note(id),
     createRarityBadge(rarity),
     note(text),
-    button('Details', () => openPriceInspector(id, rarity, id)),
+    button('Détails', () => openPriceInspector(id, rarity, id)),
   )
   return row
 }

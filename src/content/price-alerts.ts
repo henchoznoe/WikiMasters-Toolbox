@@ -47,7 +47,11 @@ function validRule(row: PriceAlert): boolean {
 export function readPriceAlerts(): AlertState {
   const owner = getAccountId()
   if (!owner)
-    return { rules: [], events: [], warning: 'Sign in to save alerts' }
+    return {
+      rules: [],
+      events: [],
+      warning: 'Connectez-vous pour enregistrer des alertes',
+    }
   try {
     const data = JSON.parse(localStorage.getItem(ALERT_PREFIX + owner) ?? '{}')
     if (data.accountId !== owner)
@@ -69,7 +73,11 @@ export function readPriceAlerts(): AlertState {
       warning: storageWarning,
     }
   } catch {
-    return { rules: [], events: [], warning: 'Alert storage unavailable' }
+    return {
+      rules: [],
+      events: [],
+      warning: 'Stockage des alertes indisponible',
+    }
   }
 }
 function save(state: AlertState): boolean {
@@ -88,23 +96,25 @@ function save(state: AlertState): boolean {
     notify()
     return true
   } catch {
-    storageWarning = 'Alert storage unavailable · latest observation not saved'
+    storageWarning =
+      'Stockage des alertes indisponible · dernière observation non enregistrée'
     notify()
     return false
   }
 }
 export function setPriceAlert(rule: PriceAlert): string {
-  if (!getAccountId()) return 'Sign in to save alerts'
-  if (!validRule(rule)) return 'Choose a positive threshold in W'
+  if (!getAccountId()) return 'Connectez-vous pour enregistrer des alertes'
+  if (!validRule(rule)) return 'Choisissez un seuil positif en W'
   const state = readPriceAlerts()
   state.rules = state.rules.filter(
     row => row.id !== rule.id || row.rarity !== rule.rarity,
   )
-  if (state.rules.length >= 50) return '50 alerts maximum · remove one first'
+  if (state.rules.length >= 50)
+    return '50 alertes maximum · supprimez-en une d’abord'
   state.rules.push(rule)
   return save(state)
-    ? 'Alert saved · observed reads only'
-    : 'Alert storage unavailable'
+    ? 'Alerte enregistrée · observations uniquement'
+    : 'Stockage des alertes indisponible'
 }
 export function removePriceAlert(id: string, rarity: string): boolean {
   const state = readPriceAlerts()

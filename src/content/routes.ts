@@ -37,7 +37,7 @@ export const toolboxPages: readonly ToolboxPage[] = [
   },
   {
     id: 'market',
-    label: 'Market',
+    label: 'Marché',
     matches: path => resolvePageAdapter(path)?.id === 'market',
     read: hydrateRoute,
     createBody: createMarketBody,
@@ -51,7 +51,7 @@ export const toolboxPages: readonly ToolboxPage[] = [
   },
   {
     id: 'packs',
-    label: 'Packs',
+    label: 'Paquets',
     matches: path => resolvePageAdapter(path)?.id === 'packs',
     read: hydrateRoute,
     createBody: () => {
@@ -78,7 +78,7 @@ export const toolboxPages: readonly ToolboxPage[] = [
   },
   {
     id: 'trades',
-    label: 'Trades',
+    label: 'Échanges',
     matches: path => resolvePageAdapter(path)?.id === 'trades',
     read: hydrateRoute,
     createBody: createPricesBody,

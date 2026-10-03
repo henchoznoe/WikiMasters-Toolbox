@@ -39,13 +39,13 @@ export function createPacksBody(): HTMLElement {
   const limitLabel = document.createElement('label')
   limitLabel.className = 'wm-field wm-manual-limit'
   const limitCaption = document.createElement('span')
-  limitCaption.textContent = 'Packs per manual run (optional)'
+  limitCaption.textContent = 'Paquets par ouverture manuelle (facultatif)'
   const limitInput = document.createElement('input')
   limitInput.dataset.wmToolboxManualLimit = '1'
   limitInput.type = 'number'
   limitInput.min = '1'
   limitInput.max = '100'
-  limitInput.placeholder = 'All available'
+  limitInput.placeholder = 'Tous les paquets disponibles'
   limitInput.value = getManualLimit()?.toString() ?? ''
   limitInput.addEventListener('change', () => {
     setManualLimit(limitInput.value === '' ? null : Number(limitInput.value))
@@ -56,7 +56,7 @@ export function createPacksBody(): HTMLElement {
   openAllButton.type = 'button'
   openAllButton.dataset.wmToolboxOpenAll = '1'
   openAllButton.className = 'wm-primary-button wm-open-all'
-  openAllButton.textContent = 'Open all available packs'
+  openAllButton.textContent = 'Ouvrir tous les paquets disponibles'
   openAllButton.addEventListener('click', onOpenAllClick)
 
   const progress = document.createElement('div')
@@ -65,7 +65,7 @@ export function createPacksBody(): HTMLElement {
   progress.hidden = true
   const progressLabel = document.createElement('span')
   progressLabel.dataset.wmToolboxProgressLabel = '1'
-  progressLabel.textContent = 'Checking available packs…'
+  progressLabel.textContent = 'Vérification des paquets disponibles…'
   const progressMeter = document.createElement('progress')
   progressMeter.max = 1
   progress.append(progressLabel, progressMeter)
@@ -99,7 +99,7 @@ export function createPacksBody(): HTMLElement {
   toggleLabel.append(
     toggle,
     toggleTrack,
-    document.createTextNode('Open packs automatically'),
+    document.createTextNode('Ouvrir les paquets automatiquement'),
   )
 
   const fields = document.createElement('div')
@@ -119,10 +119,10 @@ export function createPacksBody(): HTMLElement {
   status.setAttribute('role', 'status')
   status.className = 'wm-status'
   status.textContent = getStatus()
-  status.hidden = getStatus() === 'Disabled'
+  status.hidden = getStatus() === 'Désactivé'
   const note = document.createElement('p')
   note.className = 'wm-note'
-  note.textContent = 'Keep this tab open for scheduled opening.'
+  note.textContent = 'Gardez cet onglet ouvert pour les ouvertures programmées.'
   const autoDetails = document.createElement('div')
   autoDetails.className = 'wm-auto-details'
   autoDetails.dataset.wmToolboxAutoDetails = '1'
