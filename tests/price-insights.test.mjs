@@ -510,3 +510,137 @@ test('dashboard revision invalidates on writes, cross-tab history changes and ca
   c.cachedPriceIds()
   assert.equal(calls, 1)
 })
+
+test('collection filters and price diagnostics share exact-rarity references without fetching or changing selection', async () => {
+  const h = harness()
+  h.context.structuredClone = structuredClone
+  h.context.fetch = () => {
+    throw new Error('Local collection filtering must not fetch')
+  }
+  const c = await expose(
+    [
+      ['account', 'setAccountId'],
+      ['collection-query', 'defaultCollectionQuery,queryCollectionView'],
+      ['selection', 'defaultSelectionRules,buildSelection'],
+      ['price-diagnostics', 'diagnosePrices'],
+      ['price-store', 'readPriceQuote,syncPricesFromStorage'],
+    ],
+    h.context,
+  )
+  c.setAccountId(A)
+  const at = c.Date.now() - 1000
+  h.map.set(
+    'wm_toolbox_price_v1_catalogue',
+    JSON.stringify({ ok: true, fetchedAt: at, averages: { R: 8 } }),
+  )
+  const base = {
+    id: 'catalogue',
+    title: 'Synthetic',
+    rarity: 'R',
+    shiny: false,
+    ownerId: A,
+    starred: false,
+    tagIds: [],
+    obtainedAt: null,
+    category: 'Synthetic',
+    atk: 8,
+    def: 4,
+    hasImage: true,
+  }
+  const cards = [
+    { ...base, copyId: 'copy-1' },
+    { ...base, copyId: 'copy-2', starred: true },
+    { ...base, copyId: 'copy-3', rarity: 'C' },
+    { ...base, copyId: 'copy-4', shiny: true },
+  ]
+  const rules = c.defaultSelectionRules()
+  rules.added.add('copy-1')
+  const guards = { catalogueIds: new Set(), copyIds: new Set() }
+  const selected = () =>
+    Array.from(c.buildSelection(cards, rules, guards).cards, row => row.copyId)
+  const before = JSON.stringify(cards)
+  const q = {
+    ...c.defaultCollectionQuery(),
+    knownPrice: 'yes',
+    sort: 'price',
+    descending: true,
+  }
+  assert.deepEqual(
+    Array.from(
+      c.queryCollectionView(cards, q, c.readPriceQuote, false),
+      row => row.copyId,
+    ),
+    ['copy-1', 'copy-2'],
+  )
+  const diagnostics = c.diagnosePrices(cards, c.readPriceQuote)
+  assert.equal(diagnostics.length, 1)
+  assert.equal(diagnostics[0].card.rarity, 'C')
+  assert.equal(diagnostics[0].reason, 'no-sales')
+  const plan = selected()
+  h.map.set(
+    'wm_toolbox_price_v1_catalogue',
+    JSON.stringify({
+      ok: true,
+      fetchedAt: at,
+      lastAttempt: c.Date.now(),
+      failed: true,
+      averages: { R: 8 },
+    }),
+  )
+  c.syncPricesFromStorage('wm_toolbox_price_v1_catalogue')
+  assert.equal(
+    c.queryCollectionView(cards, q, c.readPriceQuote, false).length,
+    2,
+    'retained known prices remain filterable after refresh failure',
+  )
+  assert.ok(
+    c
+      .diagnosePrices(cards, c.readPriceQuote)
+      .some(
+        row =>
+          row.card.id === 'catalogue' &&
+          row.card.rarity === 'R' &&
+          !row.card.shiny &&
+          row.reason === 'error',
+      ),
+  )
+  assert.equal(c.readPriceQuote('catalogue', 'R').fetchedAt, at)
+  assert.deepEqual(selected(), plan)
+  assert.equal(JSON.stringify(cards), before)
+})
+
+test('saved collection views and price alerts coexist and restore independently per account', async () => {
+  const h = harness()
+  h.context.structuredClone = structuredClone
+  const c = await expose(
+    [
+      ['account', 'setAccountId'],
+      ['collection-query', 'defaultCollectionQuery'],
+      ['collection-views', 'saveView,setCompact,getViewPreferences'],
+      ['price-alerts', 'setPriceAlert,readPriceAlerts,observePriceAlerts'],
+    ],
+    h.context,
+  )
+  c.setAccountId(A)
+  c.saveView(
+    'Synthetic view',
+    { ...c.defaultCollectionQuery(), knownPrice: 'no' },
+    0,
+  )
+  c.setCompact(true)
+  c.setPriceAlert(rule(c.Date.now(), { previous: 8 }))
+  h.advance(1000)
+  c.observePriceAlerts('catalogue', { R: 12 }, c.Date.now())
+  assert.equal(c.getViewPreferences().views[0].query.knownPrice, 'no')
+  assert.equal(c.getViewPreferences().compact, true)
+  assert.equal(c.readPriceAlerts().events.length, 1)
+  c.setAccountId(B)
+  assert.equal(c.getViewPreferences().views.length, 0)
+  assert.equal(c.getViewPreferences().compact, false)
+  assert.equal(c.readPriceAlerts().events.length, 0)
+  c.setAccountId(A)
+  assert.equal(c.getViewPreferences().views.length, 1)
+  assert.equal(c.getViewPreferences().compact, true)
+  assert.equal(c.readPriceAlerts().rules.length, 1)
+  assert.equal(c.readPriceAlerts().events.length, 1)
+})

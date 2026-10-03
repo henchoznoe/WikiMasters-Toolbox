@@ -79,6 +79,25 @@ function validStoredCopy(value: unknown, owner: string): value is OwnedCard {
     !!card.copyId &&
     card.ownerId === owner &&
     typeof card.title === 'string' &&
+    (card.category === undefined ||
+      card.category === null ||
+      typeof card.category === 'string') &&
+    [card.atk, card.def].every(
+      value =>
+        value === undefined ||
+        value === null ||
+        (typeof value === 'number' && Number.isFinite(value) && value >= 0),
+    ) &&
+    (card.hasImage === undefined ||
+      card.hasImage === null ||
+      typeof card.hasImage === 'boolean') &&
+    (card.tagNames === undefined ||
+      (card.tagNames !== null &&
+        typeof card.tagNames === 'object' &&
+        !Array.isArray(card.tagNames) &&
+        Object.values(card.tagNames).every(
+          name => typeof name === 'string',
+        ))) &&
     (card.rarity === null || typeof card.rarity === 'string') &&
     typeof card.shiny === 'boolean' &&
     typeof card.starred === 'boolean' &&

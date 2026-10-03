@@ -1,4 +1,5 @@
 import { cancelDiscard, leaveCollection } from './collection-actions'
+import { createCompactControls } from './collection-browser'
 import {
   createMarketBody,
   renderMarketPanel,
@@ -67,7 +68,11 @@ export const toolboxPages: readonly ToolboxPage[] = [
     label: 'Catalogue',
     matches: path => resolvePageAdapter(path)?.id === 'catalogue',
     read: hydrateRoute,
-    createBody: createPricesBody,
+    createBody: () => {
+      const body = createPricesBody()
+      body.prepend(createCompactControls())
+      return body
+    },
     onMount: renderPricePanel,
     onUnmount: cancelPriceBatch,
   },

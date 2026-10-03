@@ -13,7 +13,9 @@ import {
   onSelectionChange,
   setDiscardRefreshCallback,
 } from './content/collection-actions'
+import { renderCompactLayout } from './content/collection-layout'
 import { renderCollectionPanel } from './content/collection-panel'
+import { onViewsChange, syncViewsFromStorage } from './content/collection-views'
 import {
   onCompatibilityChange,
   resetCompatibility,
@@ -92,6 +94,7 @@ function scheduleRender(): void {
   renderTimer = setTimeout(() => {
     renderTimer = null
     renderCards()
+    renderCompactLayout()
     renderMarketplace()
     syncToolboxPanel(location.pathname, toolboxPages)
     renderRunSummary()
@@ -113,6 +116,7 @@ onCacheChange(scheduleRender)
 setMarketCallback(scheduleRender)
 setSaleCallback(scheduleRender)
 onSelectionChange(scheduleRender)
+onViewsChange(scheduleRender)
 setDiscardRefreshCallback(() => {
   if (/^\/collection(\/|$)/.test(location.pathname)) location.reload()
 })
@@ -237,6 +241,7 @@ if (!contentWindow.__wmToolboxContentInstalled) {
     }
   })
   window.addEventListener('storage', event => {
+    syncViewsFromStorage(event.key)
     syncCollectionFromStorage(event.key)
     syncPricesFromStorage(event.key)
     if (

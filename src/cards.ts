@@ -13,6 +13,11 @@ export type OwnedCard = Card & {
   starred: boolean
   tagIds: string[]
   obtainedAt: string | null
+  category?: string | null
+  atk?: number | null
+  def?: number | null
+  hasImage?: boolean | null
+  tagNames?: Record<string, string>
 }
 
 export function nonemptyString(value: unknown): string | null {
@@ -57,6 +62,13 @@ export function mapOwnedCard(raw: unknown): OwnedCard | null {
     )
   )
     return null
+  const source = (
+    entry.card && typeof entry.card === 'object' ? entry.card : entry
+  ) as Record<string, unknown>
+  const stat = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? value
+      : null
   return {
     ...card,
     copyId: card.copyId,
@@ -70,6 +82,22 @@ export function mapOwnedCard(raw: unknown): OwnedCard | null {
         })
       : [],
     obtainedAt: nonemptyString(entry.obtained_at),
+    category: nonemptyString(source.category),
+    atk: stat(source.atk),
+    def: stat(source.def),
+    hasImage:
+      source.hide_image === true
+        ? false
+        : source.image_url === null || typeof source.image_url === 'string'
+          ? !!nonemptyString(source.image_url)
+          : null,
+    tagNames: Object.fromEntries(
+      (entry.tags as Record<string, unknown>[]).flatMap(tag => {
+        const id = nonemptyString(tag.id),
+          name = nonemptyString(tag.name)
+        return id && name ? [[id, name]] : []
+      }),
+    ),
   }
 }
 
