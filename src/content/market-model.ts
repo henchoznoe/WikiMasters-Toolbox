@@ -109,7 +109,7 @@ export function saleBlock(
   return null
 }
 export function priceDifference(value: number, quote: PriceQuote): string {
-  if (!Number.isFinite(value) || value < 1 || quote.status !== 'available')
+  if (!Number.isFinite(value) || value < 0 || quote.status !== 'available')
     return '—'
   const delta = value - quote.average
   const sign = delta > 0 ? '+' : ''

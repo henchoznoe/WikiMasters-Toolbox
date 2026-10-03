@@ -43,10 +43,15 @@ import {
   resolvePanelPage,
   syncToolboxPanel,
 } from './content/panel'
+import { ALERT_PREFIX, setPriceAlertCallback } from './content/price-alerts'
 import {
   closePriceInspector,
   renderPriceInspector,
 } from './content/price-inspector'
+import {
+  clearPriceListings,
+  observePriceListings,
+} from './content/price-listings'
 import { renderPricePanel } from './content/price-panel'
 import { cancelPriceBatch, syncPricesFromStorage } from './content/price-store'
 import {
@@ -100,6 +105,7 @@ function scheduleRender(): void {
 function readRoute(): void {
   void resolvePanelPage(location.pathname, toolboxPages)?.read?.()
 }
+setPriceAlertCallback(scheduleRender)
 setPriceRenderCallback(scheduleRender)
 setRequestCallback(scheduleRender)
 onCompatibilityChange(scheduleRender)
@@ -149,12 +155,18 @@ if (!contentWindow.__wmToolboxContentInstalled) {
         source?: string
         compatible?: boolean
         samples?: unknown[]
+        listings?: unknown[]
       }
       if (data.kind === 'account') {
         setAccountId(data.accountId)
         return
       }
       if (data.accountId !== getAccountId()) return
+      if (data.kind === 'price-listings') {
+        observePriceListings(data.listings)
+        scheduleRender()
+        return
+      }
       if (data.kind === 'sale-samples' && Array.isArray(data.samples)) {
         observeSaleSamples(
           data.samples
@@ -227,7 +239,11 @@ if (!contentWindow.__wmToolboxContentInstalled) {
   window.addEventListener('storage', event => {
     syncCollectionFromStorage(event.key)
     syncPricesFromStorage(event.key)
-    if (!event.key || event.key === SALES_PREFIX + getAccountId())
+    if (
+      !event.key ||
+      event.key === SALES_PREFIX + getAccountId() ||
+      event.key === ALERT_PREFIX + getAccountId()
+    )
       scheduleRender()
     if (event.key === `${STATS_PREFIX}${getAccountId()}`) {
       renderStats()
@@ -246,6 +262,7 @@ if (!contentWindow.__wmToolboxContentInstalled) {
   let previousPath = location.pathname + location.search
   const observer = new MutationObserver(() => {
     if (location.pathname + location.search !== previousPath) {
+      clearPriceListings()
       cancelRouteRead()
       cancelRequests()
       stopCollectionLoad()

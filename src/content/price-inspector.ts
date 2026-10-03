@@ -1,3 +1,9 @@
+import { getAccountId } from './account'
+import {
+  readPriceAlerts,
+  removePriceAlert,
+  setPriceAlert,
+} from './price-alerts'
 import { currentPriceContext, priceTooOld } from './price-context'
 import { type Observation, RARITIES } from './price-model'
 import { presentPrice } from './price-presentation'
@@ -81,6 +87,85 @@ export function openPriceInspector(
     }),
   )
   actions.firstElementChild?.setAttribute('data-price-refresh', '1')
+  const alert = document.createElement('details')
+  alert.className = 'wm-price-method'
+  const alertHeading = document.createElement('summary')
+  alertHeading.textContent = 'Price alert · native rarity average'
+  const direction = document.createElement('select')
+  direction.setAttribute('aria-label', 'Price alert direction')
+  for (const [value, label] of [
+    ['above', 'Crosses above ≥'],
+    ['below', 'Crosses below ≤'],
+  ]) {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = label
+    direction.append(option)
+  }
+  const threshold = document.createElement('input')
+  threshold.type = 'number'
+  threshold.min = '0'
+  threshold.step = 'any'
+  threshold.setAttribute('aria-label', 'Price alert threshold (W)')
+  const alertStatus = document.createElement('p')
+  alertStatus.className = 'wm-note'
+  alertStatus.setAttribute('role', 'status')
+  const saveAlert = button('Save alert', 'Save alert for this rarity', () => {
+    if (!selected) return
+    const quote = readPriceQuote(selected.id, selected.rarity)
+    alertStatus.textContent = setPriceAlert({
+      id: selected.id,
+      rarity: selected.rarity,
+      threshold: Number(threshold.value),
+      direction: direction.value === 'below' ? 'below' : 'above',
+      previous:
+        quote.status === 'available' && !quote.stale && !quote.failed
+          ? quote.average
+          : null,
+      at: Date.now(),
+    })
+    removeAlert.disabled = !readPriceAlerts().rules.some(
+      row => row.id === selected?.id && row.rarity === selected?.rarity,
+    )
+  })
+  const removeAlert = button(
+    'Remove alert',
+    'Remove alert for this rarity',
+    () => {
+      if (selected)
+        alertStatus.textContent = removePriceAlert(selected.id, selected.rarity)
+          ? 'Alert removed'
+          : 'Alert storage unavailable'
+      removeAlert.disabled = !readPriceAlerts().rules.some(
+        row => row.id === selected?.id && row.rarity === selected?.rarity,
+      )
+    },
+  )
+  const syncAlert = () => {
+    const saved = readPriceAlerts().rules.find(
+      row => row.id === selected?.id && row.rarity === selected?.rarity,
+    )
+    threshold.value = saved ? String(saved.threshold) : ''
+    direction.value = saved?.direction ?? 'above'
+    saveAlert.disabled = shiny || !getAccountId()
+    removeAlert.disabled = !saved
+    alertStatus.textContent = shiny
+      ? 'Shiny price unavailable · no alert inferred'
+      : !getAccountId()
+        ? 'Sign in to save alerts'
+        : 'Fresh Toolbox observations only · no polling · first known read establishes a baseline; no-sales gaps reset it.'
+  }
+  alert.addEventListener('toggle', syncAlert)
+  rarities.addEventListener('click', syncAlert)
+  alert.append(
+    alertHeading,
+    direction,
+    threshold,
+    saveAlert,
+    removeAlert,
+    alertStatus,
+  )
+  syncAlert()
   const method = document.createElement('details')
   method.className = 'wm-price-method'
   const summary = document.createElement('summary')
@@ -97,7 +182,16 @@ export function openPriceInspector(
     explanation.textContent = text
     method.append(explanation)
   }
-  dialog.append(header, rarities, value, actions, sample, history, method)
+  dialog.append(
+    header,
+    rarities,
+    value,
+    actions,
+    alert,
+    sample,
+    history,
+    method,
+  )
   root.append(dialog)
   document.body.append(host)
   dialog.addEventListener('keydown', event => {

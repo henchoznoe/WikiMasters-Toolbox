@@ -1,4 +1,5 @@
 import { cachePolicies, onCacheChange, writeCache } from './cache'
+import { observePriceAlerts } from './price-alerts'
 import { DECISION_TTL, type PriceContext } from './price-context'
 import {
   appendObservation,
@@ -20,6 +21,10 @@ import {
 const PREFIX = 'wm_toolbox_price_v1_'
 const HISTORY = 'wm_toolbox_price_history_v1_'
 const entries = new Map<string, PriceEntry>()
+let revision = 0
+export function priceDataRevision(): number {
+  return revision
+}
 let notify: () => void = () => {}
 export function setPriceStoreCallback(callback: () => void): void {
   notify = callback
@@ -134,14 +139,13 @@ export function readPriceQuote(id: string, rarity: string | null): PriceQuote {
       ? { status: 'unavailable', fetchedAt: Date.now(), reason: limit }
       : { status: 'loading' }
   }
-  if (!row.ok && !fresh(row)) {
-    const limit = priceRequestLimit()
-    return limit
-      ? { status: 'unavailable', fetchedAt: row.fetchedAt, reason: limit }
-      : { status: 'loading' }
-  }
   if (row.notFound) return { status: 'not-found', fetchedAt: row.fetchedAt }
-  if (!row.ok) return { status: 'unavailable', fetchedAt: row.fetchedAt }
+  if (!row.ok)
+    return {
+      status: 'unavailable',
+      fetchedAt: row.fetchedAt,
+      reason: priceRequestLimit() ?? undefined,
+    }
   if (!rarity) return { status: 'unknown-rarity', fetchedAt: row.fetchedAt }
   const average = row.averages[rarity]
   return average === undefined
@@ -185,11 +189,13 @@ export function readPriceHistory(id: string, rarity: string): Observation[] {
   }
 }
 function save(id: string, row: PriceEntry): void {
+  revision += 1
   entries.delete(id)
   entries.set(id, row)
   if (entries.size > 1000) entries.delete(entries.keys().next().value as string)
   writeCache('prices', PREFIX + id, row)
   if (row.ok && !row.failed) {
+    observePriceAlerts(id, row.averages, row.fetchedAt)
     try {
       const history: Record<string, Observation[]> = {}
       for (const rarity of RARITIES)
@@ -332,17 +338,42 @@ export async function startPriceBatch(
 }
 
 export function syncPricesFromStorage(key: string | null): void {
+  if (!key || key.startsWith(HISTORY)) {
+    revision += 1
+    notify()
+  }
   if (!key || key.startsWith(PREFIX)) {
     entries.clear()
+    revision += 1
     notify()
   }
 }
 
 onCacheChange(kind => {
+  if (kind === 'history') {
+    revision += 1
+    notify()
+  }
   if (kind === 'prices') {
+    revision += 1
     cacheEpoch += 1
     pendingPrices.clear()
     entries.clear()
     notify()
   }
 })
+
+/** Retained public cache only; never initiates market reads. */
+export function cachedPriceIds(): string[] {
+  const ids = new Set(entries.keys())
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key?.startsWith(PREFIX)) ids.add(key.slice(PREFIX.length))
+      if (key?.startsWith(HISTORY)) ids.add(key.slice(HISTORY.length))
+    }
+  } catch {
+    /* In-memory cache remains usable. */
+  }
+  return [...ids].filter(id => id.length > 0 && id.length <= 200).slice(0, 1300)
+}

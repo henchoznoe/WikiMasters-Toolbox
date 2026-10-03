@@ -1,5 +1,6 @@
 import { type Card, mapCard } from './cards'
 import { mapAuction } from './content/market-model'
+import { mapPriceListing } from './content/price-comparison'
 import { saleSample } from './content/sales-model'
 import { installNativeMarket } from './native-market'
 
@@ -146,6 +147,8 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
       .map(row => saleSample(row))
       .filter(Boolean)
     if (samples.length) emit({ kind: 'sale-samples', accountId, samples })
+    const listings = rows.slice(0, 500).map(mapPriceListing).filter(Boolean)
+    if (listings.length) emit({ kind: 'price-listings', accountId, listings })
   }
   if (
     url.pathname === '/api/marketplace' &&
