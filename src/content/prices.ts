@@ -1,4 +1,10 @@
 import { resolveCardIdentity } from './card-identity'
+import {
+  pruneCardPriceLayouts,
+  releaseCardPriceSpace,
+  reserveCardPriceSpace,
+  resetCardPriceLayouts,
+} from './card-price-layout'
 import { setCompatibilityIssue } from './compatibility'
 import { setLoadingText } from './loading'
 import {
@@ -102,6 +108,7 @@ export function registerCards(cards: Card[], kind?: string): void {
 }
 
 export function resetRegisteredCards(): void {
+  resetCardPriceLayouts()
   cardsByVariant.clear()
   variantsByTitle.clear()
   marketplaceCard = null
@@ -314,6 +321,8 @@ function renderBadge(card: HTMLElement, identity: Card): void {
   badge.dataset.cardTitle = identity.title
   badge.dataset.shiny = String(identity.shiny)
   updatePriceBadge(badge, quote)
+  if (marketLink) releaseCardPriceSpace(host)
+  else reserveCardPriceSpace(card, host)
   if (needsPrice(id)) {
     visiblePriceObserver.observe(card)
   }
@@ -332,6 +341,7 @@ const visiblePriceObserver = new IntersectionObserver(
 )
 
 export function renderCards(): void {
+  pruneCardPriceLayouts()
   if (
     !/^\/(collection|global-collection|marketplace|trades)(\/|$)/.test(
       location.pathname,
@@ -376,6 +386,8 @@ export function renderCards(): void {
         const badge = host.shadowRoot
           ?.firstElementChild as HTMLButtonElement | null
         if (badge) showUnknownPrice(badge)
+        if (target === stats) reserveCardPriceSpace(card, host)
+        else releaseCardPriceSpace(host)
       }
       continue
     }

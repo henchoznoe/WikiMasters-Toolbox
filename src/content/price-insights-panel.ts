@@ -1,13 +1,9 @@
-import {
-  clearPriceAlertEvents,
-  readPriceAlerts,
-  removePriceAlert,
-} from './price-alerts'
+import { formatDate } from './date-format'
 import { listingComparison } from './price-comparison'
 import { diagnosePrices, priceDashboard } from './price-diagnostics'
 import { openPriceInspector } from './price-inspector'
 import { readPriceListings } from './price-listings'
-import { formatPriceAge, presentPrice } from './price-presentation'
+import { presentPrice } from './price-presentation'
 import {
   cachedPriceIds,
   canRefreshPrice,
@@ -52,22 +48,6 @@ function replace(body: HTMLElement, key: string, build: () => Node[]): void {
 export function createPriceInsights(): HTMLElement {
   const body = document.createElement('div')
   body.className = 'wm-price-insights'
-  const alerts = section('Alertes de prix', 'alerts')
-  const alertBody = document.createElement('div')
-  alertBody.dataset.priceAlertsBody = '1'
-  const clear = button('Effacer les notifications', () => {
-    const result = clearPriceAlertEvents()
-    clear.title = result ? '' : 'Stockage des alertes indisponible'
-    renderPriceInsights()
-  })
-  clear.dataset.priceAlertsClear = '1'
-  alerts.append(
-    note(
-      'Choisissez un seuil dans le détail du prix d’une carte. Lectures fraîches de Toolbox uniquement · aucune surveillance en arrière-plan.',
-    ),
-    clear,
-    alertBody,
-  )
   const diagnostics = section('Prix manquants', 'diagnostics')
   const scope = document.createElement('select')
   scope.dataset.priceDiagnosticScope = '1'
@@ -133,9 +113,9 @@ export function createPriceInsights(): HTMLElement {
   comparisonBody.dataset.priceComparisonBody = '1'
   comparisons.append(comparisonBody)
   comparisons.hidden = !/^\/marketplace(\/|$)/.test(location.pathname)
-  body.append(comparisons, alerts, diagnostics, dashboard)
+  body.append(comparisons, diagnostics, dashboard)
   comparisons.addEventListener('toggle', renderPriceInsights)
-  for (const details of [alerts, diagnostics, dashboard])
+  for (const details of [diagnostics, dashboard])
     details.addEventListener('toggle', renderPriceInsights)
   return body
 }
@@ -184,54 +164,6 @@ export function renderPriceInsights(): void {
       return nodes
     })
   }
-  const alerts = root.querySelector<HTMLElement>('[data-price-alerts-body]')
-  const state = readPriceAlerts()
-  const pricesSummary = root.querySelector('[data-price-controls-summary]')
-  if (pricesSummary)
-    pricesSummary.textContent = `Prix${state.events.length ? ` · ${state.events.length} alertes` : ''}`
-  const clear = root.querySelector<HTMLButtonElement>(
-    '[data-price-alerts-clear]',
-  )
-  if (clear) clear.disabled = state.events.length === 0
-  const summary = root.querySelector('[data-price-insights="alerts"] summary')
-  if (summary)
-    summary.textContent = `Alertes de prix${state.events.length ? ` · ${state.events.length}` : ''}`
-  if (alerts?.parentElement?.hasAttribute('open'))
-    replace(alerts, JSON.stringify(state), () => {
-      const nodes: Node[] = [
-        note(
-          `${state.rules.length} / 50 alertes · ${state.events.length} notifications / 30 jours${state.warning ? ` · ${state.warning}` : ''}`,
-        ),
-      ]
-      for (const event of state.events.slice(-10).reverse())
-        nodes.push(
-          note(
-            `${event.id} · ${event.rarity} · ${event.direction === 'above' ? '≥' : '≤'} ${event.threshold} W · observé ${event.average} W · ${formatPriceAge(event.at)}`,
-            new Date(event.at).toLocaleString('fr-FR'),
-          ),
-        )
-      if (state.events.length > 10)
-        nodes.push(note('10 dernières notifications affichées'))
-      for (const rule of state.rules) {
-        const row = document.createElement('div')
-        row.className = 'wm-market-row'
-        row.append(
-          note(
-            `${rule.id} · ${rule.rarity} · ${rule.direction === 'above' ? '≥' : '≤'} ${rule.threshold} W`,
-          ),
-          button('Détails', () =>
-            openPriceInspector(rule.id, rule.rarity, rule.id),
-          ),
-          button('Supprimer', () => {
-            if (!removePriceAlert(rule.id, rule.rarity))
-              row.append(note('Stockage des alertes indisponible'))
-            renderPriceInsights()
-          }),
-        )
-        nodes.push(row)
-      }
-      return nodes
-    })
   const list = root.querySelector<HTMLElement>('[data-price-diagnostics-body]')
   if (list?.parentElement?.hasAttribute('open')) {
     const scope = root.querySelector<HTMLSelectElement>(
@@ -392,7 +324,7 @@ export function renderPriceInsights(): void {
         historyRow(
           row.id,
           row.rarity,
-          `${row.first?.average} → ${row.last?.average} W · ${(row.delta ?? 0) > 0 ? '+' : ''}${row.delta?.toLocaleString('fr-FR')} W · ${new Date(row.first?.at ?? 0).toLocaleDateString('fr-FR')} → ${new Date(row.last?.at ?? 0).toLocaleDateString('fr-FR')} · ${row.gaps} jours non observés · ${row.missing} jours sans données de vente`,
+          `${row.first?.average} → ${row.last?.average} W · ${(row.delta ?? 0) > 0 ? '+' : ''}${row.delta?.toLocaleString('fr-FR')} W · ${formatDate(row.first?.at ?? 0)} → ${formatDate(row.last?.at ?? 0)} · ${row.gaps} jours non observés · ${row.missing} jours sans données de vente`,
         ),
       )
     nodes.push(

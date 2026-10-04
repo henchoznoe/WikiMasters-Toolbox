@@ -1,3 +1,4 @@
+import { formatDate, formatTime, shortDate } from './date-format'
 import type { Observation } from './price-model'
 
 const DAY = 86400_000
@@ -59,22 +60,13 @@ export function graphScale(days: TimelineDay[]): { min: number; max: number } {
 }
 const money = (value: number) =>
   new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(value)
-const dayDate = (at: number) =>
-  new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    timeZone: 'UTC',
-  }).format(at)
 export function timelineLabel(point: TimelineDay): string {
-  const date = new Intl.DateTimeFormat('fr-FR', {
-    dateStyle: 'medium',
-    timeZone: 'UTC',
-  }).format(point.at)
+  const date = `${formatDate(point.at)} · Berne`
   return point.kind === 'missing'
-    ? `${date} UTC · jour non observé`
+    ? `${date} · jour non observé`
     : point.kind === 'no-sales'
-      ? `${date} UTC · lecture sans données de vente`
-      : `${date} UTC · ${money(point.average as number)} W · lu à ${new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(point.at)} UTC`
+      ? `${date} · lecture sans données de vente · lu à ${formatTime(point.at)}`
+      : `${date} · ${money(point.average as number)} W · lu à ${formatTime(point.at)}`
 }
 export function createPriceGraph(points: Observation[]): HTMLElement {
   const days = priceTimeline(points)
@@ -98,7 +90,7 @@ export function createPriceGraph(points: Observation[]): HTMLElement {
   svg.setAttribute('role', 'group')
   svg.setAttribute(
     'aria-label',
-    'Historique local des prix en W, par jour UTC ; navigation par flèches',
+    'Historique local des prix en W, dates en heure de Berne ; navigation par flèches',
   )
   const add = (
     tag: string,
@@ -142,12 +134,12 @@ export function createPriceGraph(points: Observation[]): HTMLElement {
   add(
     'text',
     { x: '64', y: '158', class: 'wm-graph-axis' },
-    dayDate(days[0].at),
+    shortDate(days[0].at),
   )
   add(
     'text',
     { x: '342', y: '158', 'text-anchor': 'end', class: 'wm-graph-axis' },
-    `${dayDate(days.at(-1)?.at ?? 0)} UTC`,
+    `${shortDate(days.at(-1)?.at ?? 0)} Berne`,
   )
   const controls: SVGElement[] = []
   for (const [index, day] of days.entries()) {

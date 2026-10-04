@@ -1,3 +1,4 @@
+import { formatDateTime } from './date-format'
 import { type PriceContext, priceTooOld } from './price-context'
 import type { PriceQuote } from './price-store'
 
@@ -11,10 +12,7 @@ export function formatPriceAge(fetchedAt: number, now = Date.now()): string {
 }
 
 export function priceCheckDate(fetchedAt: number): string {
-  return new Intl.DateTimeFormat('fr-FR', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(fetchedAt))
+  return formatDateTime(fetchedAt)
 }
 
 type PricePresentation = {

@@ -97,7 +97,6 @@ test('price controls and accessibility labels are in French', async () => {
     .join('\n')
   for (const label of [
     'Prix manquants',
-    'Alertes de prix',
     'Prix des cartes de cette page',
     'Options d’actualisation',
     'Actualiser les prix en cache',
@@ -107,6 +106,7 @@ test('price controls and accessibility labels are in French', async () => {
     text,
     /\b(Prices|Load|Refresh|Packs|Discard|Unknown|Shiny)\b/,
   )
+  assert.doesNotMatch(text, /alerte/i)
   assert.equal(nodes[0].tag, 'section')
   const start = nodes.find(node => node.dataset.priceStart)
   assert.ok(start)

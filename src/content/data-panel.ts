@@ -6,6 +6,7 @@ import {
   inspectCache,
 } from './cache'
 import { getCompatibilityIssues } from './compatibility'
+import { formatDateTime } from './date-format'
 import { resolvePageAdapter } from './page-adapters'
 import { requestLimit } from './requests'
 
@@ -70,9 +71,9 @@ export function renderDataControls(): void {
     info.textContent = `${policy.label} · ${item.count} · ${Math.ceil(item.bytes / 1024)} Ko`
     const date = document.createElement('small')
     date.className = 'wm-cache-date'
-    date.textContent = `Synchro : ${item.updatedAt ? new Date(item.updatedAt).toLocaleString('fr-FR') : '—'}`
+    date.textContent = `Synchro : ${item.updatedAt ? formatDateTime(item.updatedAt) : '—'}`
     info.append(date)
-    info.title = `Dernière synchro : ${item.updatedAt ? new Date(item.updatedAt).toLocaleString('fr-FR') : '—'}. À jour pendant ${policy.freshness / 60_000} min ; conservé ${policy.retention / 86400_000} jours. Maximum ${policy.maxEntries} entrées / ${policy.maxBytes / 1024 / 1024} Mo tous comptes confondus.`
+    info.title = `Dernière synchro : ${item.updatedAt ? formatDateTime(item.updatedAt) : '—'}. À jour pendant ${policy.freshness / 60_000} min ; conservé ${policy.retention / 86400_000} jours. Maximum ${policy.maxEntries} entrées / ${policy.maxBytes / 1024 / 1024} Mo tous comptes confondus.`
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'wm-quiet-button'

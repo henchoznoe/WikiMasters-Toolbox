@@ -1,10 +1,5 @@
-import { getAccountId } from './account'
+import { formatDate, formatDateTime } from './date-format'
 import { setLoadingText } from './loading'
-import {
-  readPriceAlerts,
-  removePriceAlert,
-  setPriceAlert,
-} from './price-alerts'
 import { currentPriceContext, priceTooOld } from './price-context'
 import { createPriceGraph } from './price-graph'
 import { RARITIES } from './price-model'
@@ -97,96 +92,13 @@ export function openPriceInspector(
   if (actions.firstElementChild)
     actions.firstElementChild.className = 'wm-primary-button'
   actions.firstElementChild?.setAttribute('data-price-refresh', '1')
-  const alert = document.createElement('details')
-  alert.className = 'wm-price-method'
-  const alertHeading = document.createElement('summary')
-  alertHeading.textContent = 'Alerte de prix · moyenne native par rareté'
-  const direction = document.createElement('select')
-  direction.setAttribute('aria-label', 'Sens de l’alerte de prix')
-  for (const [value, label] of [
-    ['above', 'Franchit à la hausse ≥'],
-    ['below', 'Franchit à la baisse ≤'],
-  ]) {
-    const option = document.createElement('option')
-    option.value = value
-    option.textContent = label
-    direction.append(option)
-  }
-  const threshold = document.createElement('input')
-  threshold.type = 'number'
-  threshold.min = '0'
-  threshold.step = 'any'
-  threshold.setAttribute('aria-label', 'Seuil de l’alerte de prix (W)')
-  const alertStatus = document.createElement('p')
-  alertStatus.className = 'wm-note'
-  alertStatus.setAttribute('role', 'status')
-  const saveAlert = button(
-    'Enregistrer l’alerte',
-    'Enregistrer l’alerte pour cette rareté',
-    () => {
-      if (!selected) return
-      const quote = readPriceQuote(selected.id, selected.rarity)
-      alertStatus.textContent = setPriceAlert({
-        id: selected.id,
-        rarity: selected.rarity,
-        threshold: Number(threshold.value),
-        direction: direction.value === 'below' ? 'below' : 'above',
-        previous:
-          quote.status === 'available' && !quote.stale && !quote.failed
-            ? quote.average
-            : null,
-        at: Date.now(),
-      })
-      removeAlert.disabled = !readPriceAlerts().rules.some(
-        row => row.id === selected?.id && row.rarity === selected?.rarity,
-      )
-    },
-  )
-  const removeAlert = button(
-    'Supprimer l’alerte',
-    'Supprimer l’alerte pour cette rareté',
-    () => {
-      if (selected)
-        alertStatus.textContent = removePriceAlert(selected.id, selected.rarity)
-          ? 'Alerte supprimée'
-          : 'Stockage des alertes indisponible'
-      removeAlert.disabled = !readPriceAlerts().rules.some(
-        row => row.id === selected?.id && row.rarity === selected?.rarity,
-      )
-    },
-  )
-  const syncAlert = () => {
-    const saved = readPriceAlerts().rules.find(
-      row => row.id === selected?.id && row.rarity === selected?.rarity,
-    )
-    threshold.value = saved ? String(saved.threshold) : ''
-    direction.value = saved?.direction ?? 'above'
-    saveAlert.disabled = shiny || !getAccountId()
-    removeAlert.disabled = !saved
-    alertStatus.textContent = shiny
-      ? 'Prix des brillantes indisponible · aucune alerte déduite'
-      : !getAccountId()
-        ? 'Connectez-vous pour enregistrer des alertes'
-        : 'Observations fraîches de Toolbox uniquement · aucune surveillance continue · la première lecture connue établit la référence ; l’absence de données de vente la réinitialise.'
-  }
-  alert.addEventListener('toggle', syncAlert)
-  rarities.addEventListener('click', syncAlert)
-  alert.append(
-    alertHeading,
-    direction,
-    threshold,
-    saveAlert,
-    removeAlert,
-    alertStatus,
-  )
-  syncAlert()
   const method = document.createElement('details')
   method.className = 'wm-price-method'
   const summary = document.createElement('summary')
   summary.textContent = 'Méthode'
   method.append(summary)
   for (const text of [
-    'Moyenne : récapitulatif WikiMasters pour cette rareté, période et volume inconnus. Âge : date de lecture, pas de vente. La surcote des brillantes n’est pas exposée. Fraîcheur : 24 h pour l’album ; 15 min pour la vente / l’échange. L’âge original est conservé si l’actualisation échoue. Graphique local : une moyenne observée par jour UTC sur les 90 derniers jours ; les jours absents restent des trous.',
+    'Moyenne : récapitulatif WikiMasters pour cette rareté, période et volume inconnus. Âge : date de lecture, pas de vente. La surcote des brillantes n’est pas exposée. Fraîcheur : 24 h pour l’album ; 15 min pour la vente / l’échange. L’âge original est conservé si l’actualisation échoue. Graphique local : une moyenne observée par jour UTC sur les 90 derniers jours ; les jours absents restent des trous. Les dates et heures sont affichées dans le fuseau de Berne (UTC+2 en été, UTC+1 en hiver).',
     'Échantillon de ventes : ventes explicitement conclues avec montant final, fin d’enchère, rareté et variante brillante au moment de la vente, issues de l’historique natif gratuit ou des enchères consultées. Un résultat par enchère, pour le même ID du catalogue, la même rareté et la même variante brillante. Les 30 derniers jours selon la fin d’enchère ; jusqu’à 1 000 résultats par compte.',
     'Médiane : au moins 5 ventes conclues sur 3 jours UTC distincts. Fourchette indicative Q1–Q3 : au moins 10 ventes sur 3 jours, interpolation linéaire, moitié centrale des prix observés. Valeurs extrêmes : hors de Q1 − 1,5×écart interquartile / Q3 + 1,5×écart interquartile ; elles restent dans le calcul de la médiane.',
     'Ces seuils minimaux permettent l’affichage sans prouver la couverture du marché. Le volume observé est incomplet. L’échantillon peut être biaisé : la fourchette n’est ni un intervalle de confiance ni une prédiction.',
@@ -204,7 +116,6 @@ export function openPriceInspector(
     actions,
     history,
     sample,
-    alert,
     method,
   )
   root.append(dialog)
@@ -292,7 +203,7 @@ export function renderPriceInspector(): void {
         ? `Fourchette indicative Q1–Q3 : ${money(estimate.range[0])}–${money(estimate.range[1])} W · échantillon incomplet`
         : 'Fourchette — · nécessite 10 ventes sur 3 jours distincts',
       estimate.oldest && estimate.newest
-        ? `Fins d’enchères : ${new Date(estimate.oldest).toLocaleDateString('fr-FR')} – ${new Date(estimate.newest).toLocaleDateString('fr-FR')} · dernière le ${new Date(estimate.newest).toLocaleString('fr-FR')}`
+        ? `Fins d’enchères : ${formatDate(estimate.oldest)} – ${formatDate(estimate.newest)} · dernière le ${formatDateTime(estimate.newest)}`
         : 'Consultez l’historique gratuit du marché / les ventes conclues pour constituer un échantillon',
     ]
     const signature = JSON.stringify(lines)

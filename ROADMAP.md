@@ -17,16 +17,15 @@ L’extension est indépendante et n’est pas approuvée par WikiMasters. Ses l
 - [x] Échantillon local par compte des seules ventes explicitement conclues : variante exacte, montant final, fin d’enchère, déduplication et rétention de 30 jours.
 - [x] Médiane après 5 ventes sur 3 jours UTC distincts ; fourchette indicative Q1–Q3 après 10 ventes sur 3 jours. Échantillon incomplet et méthode visibles.
 - [x] Comparaison annonce / moyenne avec écart en W et en pourcentage, sans confondre mise de départ, offre et vente conclue.
-- [x] Alertes locales par compte et rareté sur les seules lectures fraîches réussies ; aucune surveillance continue.
 - [x] Diagnostics des prix manquants et relance manuelle limitée ; tableau de bord des références et de l’évolution observées localement.
 - [x] Déduplication, espacement, budget commun de 200 lectures / heure par onglet, délais, annulation et pauses serveur ; transport Toolbox limité aux GET autorisés.
-- [x] Contrôles de caches, isolation par compte des alertes et échantillons, interface française compacte et accessible.
+- [x] Contrôles de caches, isolation par compte des échantillons, interface française compacte et accessible.
 
 ## Améliorations de précision et de lisibilité
 
 - [x] **PRICE-01 · P0 — Fraîcheur au moment d’une décision.** Afficher ensemble la date de lecture, le seuil de 15 min et l’échec éventuel dans les badges du marché et des échanges, les comparaisons et le détail. Conserver l’âge de la dernière lecture réussie ; actualisation ciblée et contexte recalculé à chaque rendu.
 - [x] **PRICE-02 · P0 — Identités ambiguës.** Résoudre la carte par rareté native exacte, titre et ID natif du catalogue lorsqu’il est présent. Rejeter les titres homonymes, ID contradictoires, raretés absentes et variantes brillantes ambiguës ; afficher « Prix inconnu » sans lancer de lecture pour une identité incertaine. Ne pas attribuer de moyenne native ou de graphe normal aux brillantes.
-- [x] **PRICE-03 · P1 — Graphes plus lisibles.** Afficher une échelle en W, les dates UTC et un détail au survol ou au focus. Distinguer prix observé, lecture sans données de vente et jour non observé, sans relier les trous. Navigation par flèches, Début et Fin ; états vides et prix constants explicites.
+- [x] **PRICE-03 · P1 — Graphes plus lisibles.** Afficher une échelle en W, les dates et heures de Berne et un détail au survol ou au focus. Distinguer prix observé, lecture sans données de vente et jour non observé, sans relier les trous. Navigation par flèches, Début et Fin ; états vides et prix constants explicites.
 - [ ] **PRICE-04 · P1 — Comparaison des sources.** Présenter ensemble moyenne native et médiane des ventes conclues quand l’échantillon suffit, avec dates, taille, dispersion et limites ; ne jamais fusionner les sources en un prix certain.
 - [ ] **PRICE-05 · P1 — Couverture de l’échantillon.** Rendre plus visible le nombre de ventes, les jours représentés, les valeurs extrêmes et les variantes non évaluées.
 - [ ] **PRICE-06 · P1 — Prix des brillantes.** Ne proposer une estimation distincte que si des ventes conclues de la variante exacte suffisent ; la moyenne native seule ne justifie aucune surcote.
@@ -35,7 +34,9 @@ L’extension est indépendante et n’est pas approuvée par WikiMasters. Ses l
 
 ## Interface des prix
 
-Le panneau présente directement le récapitulatif de la page, les six filtres de rareté en dégradé et l’actualisation. Les options avancées, diagnostics, alertes et caches restent secondaires. Le détail place le prix, sa fraîcheur et son graphe avant les explications et alertes. Des indicateurs tournants accompagnés de libellés explicites remplacent les points de suspension de chargement et respectent la réduction des animations.
+Le panneau présente directement le récapitulatif de la page, les six filtres de rareté en dégradé et l’actualisation. Les options avancées, diagnostics et caches restent secondaires. Les cartes réservent la hauteur du badge et une marge inférieure, y compris pour les titres longs. Le détail place le prix, sa fraîcheur et son graphe avant les explications. Des indicateurs tournants accompagnés de libellés explicites remplacent les points de suspension de chargement et respectent la réduction des animations.
+
+Les dates et heures affichées utilisent le fuseau de Berne (`Europe/Zurich`) : UTC+2 en été, UTC+1 en hiver. Les regroupements quotidiens des observations restent calculés en UTC.
 
 ## Principes de données
 

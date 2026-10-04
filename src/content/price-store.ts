@@ -1,5 +1,4 @@
 import { cachePolicies, onCacheChange, writeCache } from './cache'
-import { observePriceAlerts } from './price-alerts'
 import { DECISION_TTL, type PriceContext } from './price-context'
 import {
   appendObservation,
@@ -194,7 +193,6 @@ function save(id: string, row: PriceEntry): void {
   if (entries.size > 1000) entries.delete(entries.keys().next().value as string)
   writeCache('prices', PREFIX + id, row)
   if (row.ok && !row.failed) {
-    observePriceAlerts(id, row.averages, row.fetchedAt)
     try {
       const history: Record<string, Observation[]> = {}
       for (const rarity of RARITIES)

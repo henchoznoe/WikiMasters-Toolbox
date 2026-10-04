@@ -278,7 +278,7 @@ test('graph focus and arrow keys visit prices, missing days and no-sales days wi
   )
   let prevented = false
   controls[0].focus()
-  assert.match(readout.textContent, /10 W.*UTC/)
+  assert.match(readout.textContent, /Berne.*10 W/)
   controls[0].listeners.get('keydown')({
     key: 'ArrowRight',
     preventDefault() {
@@ -292,7 +292,7 @@ test('graph focus and arrow keys visit prices, missing days and no-sales days wi
   controls[1].listeners.get('keydown')({ key: 'End', preventDefault() {} })
   assert.match(readout.textContent, /lecture sans données de vente/)
   controls[2].listeners.get('mouseenter')({})
-  assert.match(readout.textContent, /UTC/)
+  assert.match(readout.textContent, /Berne/)
   controls[2].listeners.get('keydown')({ key: 'Home', preventDefault() {} })
   assert.match(readout.textContent, /10 W/)
 })
@@ -482,4 +482,89 @@ test('loading indicators have an explicit French label, stay stable while render
   c.setLoadingText(target, 'Actualisation terminée', false)
   assert.equal(target.getAttribute('aria-busy'), 'false')
   assert.equal(target.textContent, 'Actualisation terminée')
+})
+
+test('all reading dates use Bern time with summer/winter offsets and local midnight', async () => {
+  const c = await expose('date-format', 'formatDateTime,formatTime,shortDate')
+  assert.match(
+    c.formatDateTime(Date.UTC(2026, 9, 4, 12)),
+    /4 oct\. 2026, 14:00 UTC\+2/,
+  )
+  assert.match(
+    c.formatDateTime(Date.UTC(2026, 0, 15, 12)),
+    /15 janv\. 2026, 13:00 UTC\+1/,
+  )
+  assert.match(
+    c.formatDateTime(Date.UTC(2026, 9, 3, 23, 30)),
+    /4 oct\. 2026, 01:30 UTC\+2/,
+  )
+  assert.equal(c.shortDate(Date.UTC(2026, 9, 3, 23, 30)), '04/10')
+  const graph = await expose('price-graph', 'timelineLabel')
+  assert.match(
+    graph.timelineLabel({
+      at: Date.UTC(2026, 9, 3, 23, 30),
+      average: 7,
+      kind: 'price',
+    }),
+    /4 oct\. 2026.*Berne.*01:30 UTC\+2/,
+  )
+})
+
+test('card price space follows badge height and restores native responsive styles', async () => {
+  let callback,
+    height = 28
+  const watched = new Set()
+  const body = { className: 'absolute top-[45%] bottom-0', style: { top: '' } }
+  const tile = {
+    className: 'h-[clamp(11.8rem,60vw,14rem)]',
+    style: { height: '' },
+    querySelector: () => ({ parentElement: body }),
+  }
+  const host = {
+    isConnected: true,
+    get offsetHeight() {
+      return height
+    },
+  }
+  const c = await expose(
+    'card-price-layout',
+    'reserveCardPriceSpace,releaseCardPriceSpace,resetCardPriceLayouts,pruneCardPriceLayouts',
+    {
+      ResizeObserver: class {
+        constructor(cb) {
+          callback = cb
+        }
+        observe(node) {
+          watched.add(node)
+        }
+        unobserve(node) {
+          watched.delete(node)
+        }
+        disconnect() {
+          watched.clear()
+        }
+      },
+    },
+  )
+  c.reserveCardPriceSpace(tile, host)
+  assert.equal(tile.style.height, 'calc(clamp(11.8rem,60vw,14rem) + 66px)')
+  assert.equal(body.style.top, '')
+  height = 48
+  callback([{ target: host }])
+  assert.equal(tile.style.height, 'calc(clamp(11.8rem,60vw,14rem) + 102px)')
+  c.reserveCardPriceSpace(tile, host)
+  c.releaseCardPriceSpace(host)
+  assert.equal(tile.style.height, '')
+  assert.equal(body.style.top, '')
+  assert.equal(watched.size, 0)
+  c.reserveCardPriceSpace(tile, host)
+  host.isConnected = false
+  c.pruneCardPriceLayouts()
+  assert.equal(watched.size, 0)
+  host.isConnected = true
+  c.reserveCardPriceSpace(tile, host)
+  c.resetCardPriceLayouts()
+  assert.equal(tile.style.height, '')
+  assert.equal(body.style.top, '')
+  assert.equal(watched.size, 0)
 })
