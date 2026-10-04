@@ -381,9 +381,12 @@ test('an open inspector follows entry into and exit from a native sale context',
   c.renderPriceInspector()
   assert.equal(value.textContent, '12 W ↻ · 20 min')
   assert.match(value.title, /actualisez avant de décider/)
+  const freshness = root.querySelector('[data-price-freshness]')
+  assert.match(freshness.textContent, /Lu le .*Seuil 15 min.*à actualiser/)
+  assert.equal(freshness.dataset.warning, 'true')
   assert.equal(refresh.textContent, '↻ Actualiser avant de décider')
   saleForm = false
   c.renderPriceInspector()
   assert.equal(value.textContent, '12 W · 20 min')
-  assert.equal(refresh.textContent, '↻')
+  assert.equal(refresh.textContent, '↻ Actualiser')
 })

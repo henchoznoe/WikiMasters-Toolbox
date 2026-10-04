@@ -57,101 +57,7 @@ function harness() {
     },
   }
 }
-const rule = (at, extra = {}) => ({
-  id: 'catalogue',
-  rarity: 'R',
-  threshold: 10,
-  direction: 'above',
-  previous: null,
-  at,
-  ...extra,
-})
-
-test('alerts only notify threshold crossings from fresh exact-rarity observations and deduplicate reads', async () => {
-  const h = harness()
-  const c = await expose(
-    [
-      ['account', 'setAccountId'],
-      ['price-alerts', 'setPriceAlert,observePriceAlerts,readPriceAlerts'],
-    ],
-    h.context,
-  )
-  c.setAccountId(A)
-  assert.match(c.setPriceAlert(rule(c.Date.now())), /enregistrée/)
-  h.advance(1000)
-  c.observePriceAlerts('catalogue', { R: 12 }, c.Date.now())
-  assert.equal(
-    c.readPriceAlerts().events.length,
-    0,
-    'first read establishes a baseline',
-  )
-  h.advance(1000)
-  c.observePriceAlerts('other', { R: 5 }, c.Date.now())
-  c.observePriceAlerts('catalogue', { C: 8 }, c.Date.now())
-  assert.equal(
-    c.readPriceAlerts().rules[0].previous,
-    null,
-    'no-sales gap resets exact-rarity baseline',
-  )
-  h.advance(1000)
-  c.observePriceAlerts('catalogue', { R: 8 }, c.Date.now())
-  h.advance(1000)
-  const at = c.Date.now()
-  c.observePriceAlerts('catalogue', { R: 10 }, at)
-  c.observePriceAlerts('catalogue', { R: 10 }, at)
-  assert.equal(c.readPriceAlerts().events.length, 1)
-  assert.equal(c.readPriceAlerts().events[0].average, 10)
-  h.advance(2 * DAY)
-  c.observePriceAlerts('catalogue', { R: 1 }, at + 1)
-  assert.equal(
-    c.readPriceAlerts().rules[0].previous,
-    10,
-    'stale observation ignored',
-  )
-  c.observePriceAlerts('catalogue', { R: -1 }, c.Date.now())
-  assert.equal(c.readPriceAlerts().rules[0].previous, 10)
-})
-
-test('alerts isolate accounts, validate thresholds, bound notifications and surface storage failures', async () => {
-  const h = harness()
-  const c = await expose(
-    [
-      ['account', 'setAccountId'],
-      [
-        'price-alerts',
-        'setPriceAlert,observePriceAlerts,readPriceAlerts,removePriceAlert,clearPriceAlertEvents',
-      ],
-    ],
-    h.context,
-  )
-  assert.match(c.setPriceAlert(rule(c.Date.now())), /Connectez-vous/)
-  c.setAccountId(A)
-  assert.match(c.setPriceAlert(rule(c.Date.now(), { threshold: 0 })), /positif/)
-  assert.match(
-    c.setPriceAlert(rule(c.Date.now(), { rarity: 'invalid' })),
-    /positif/,
-  )
-  c.setPriceAlert(rule(c.Date.now(), { direction: 'below', previous: 12 }))
-  for (let i = 0; i < 220; i++) {
-    h.advance(1000)
-    c.observePriceAlerts('catalogue', { R: i % 2 ? 12 : 10 }, c.Date.now())
-  }
-  assert.equal(c.readPriceAlerts().events.length, 100)
-  c.setAccountId(B)
-  assert.equal(c.readPriceAlerts().rules.length, 0)
-  c.setAccountId(A)
-  assert.equal(c.readPriceAlerts().rules.length, 1)
-  c.clearPriceAlertEvents()
-  assert.equal(c.readPriceAlerts().events.length, 0)
-  c.removePriceAlert('catalogue', 'R')
-  assert.equal(c.readPriceAlerts().rules.length, 0)
-  h.context.localStorage.setItem = () => {
-    throw new Error('quota')
-  }
-  assert.match(c.setPriceAlert(rule(c.Date.now())), /indisponible/)
-})
-
-test('price engine alerts only on successful reads; failed refresh retains reference and diagnostics beyond retry delay', async () => {
+test('price engine failed refresh retains reference and diagnostics beyond retry delay', async () => {
   const h = harness()
   let amount = 8,
     status = 200,
@@ -167,8 +73,6 @@ test('price engine alerts only on successful reads; failed refresh retains refer
   }
   const c = await expose(
     [
-      ['account', 'setAccountId'],
-      ['price-alerts', 'setPriceAlert,readPriceAlerts'],
       [
         'price-store',
         'requestPriceQuote,readPriceQuote,readPriceHistory,cachedPriceIds',
@@ -176,25 +80,22 @@ test('price engine alerts only on successful reads; failed refresh retains refer
     ],
     h.context,
   )
-  c.setAccountId(A)
   await c.requestPriceQuote('catalogue')
   const first = c.readPriceQuote('catalogue', 'R')
-  c.setPriceAlert(rule(c.Date.now(), { previous: 8 }))
   h.advance(61_000)
   amount = 12
   status = 503
   await c.requestPriceQuote('catalogue', true)
-  assert.equal(c.readPriceAlerts().events.length, 0)
   assert.equal(c.readPriceQuote('catalogue', 'R').fetchedAt, first.fetchedAt)
   h.advance(61_000)
   status = 200
   await c.requestPriceQuote('catalogue', true)
-  assert.equal(c.readPriceAlerts().events.length, 1)
   assert.equal(
     c.readPriceHistory('catalogue', 'R').length,
     1,
-    'same-day graph replacement does not erase crossing',
+    'successful same-day read replaces the observation',
   )
+  assert.equal(c.readPriceHistory('catalogue', 'R')[0].average, 12)
   assert.equal(c.cachedPriceIds().length, 1)
   h.advance(61_000)
   status = 404
@@ -387,37 +288,6 @@ test('listing mapper never falls back to catalogue rarity or infers missing shin
     null,
   )
   assert.equal(c.mapPriceListing({ ...raw, is_shiny: undefined }), null)
-})
-
-test('alert cap preserves existing rules, reloads them and expires old notifications', async () => {
-  const h = harness()
-  const imports = [
-    ['account', 'setAccountId'],
-    ['price-alerts', 'setPriceAlert,readPriceAlerts,observePriceAlerts'],
-  ]
-  const c = await expose(imports, h.context)
-  c.setAccountId(A)
-  for (let i = 0; i < 50; i++)
-    assert.match(
-      c.setPriceAlert(rule(c.Date.now(), { id: `card-${i}`, previous: 8 })),
-      /enregistrée/,
-    )
-  assert.match(
-    c.setPriceAlert(rule(c.Date.now(), { id: 'overflow' })),
-    /50 alertes maximum/,
-  )
-  assert.match(
-    c.setPriceAlert(rule(c.Date.now(), { id: 'card-0', previous: 8 })),
-    /enregistrée/,
-  )
-  h.advance(1000)
-  c.observePriceAlerts('card-0', { R: 12 }, c.Date.now())
-  const fresh = await expose(imports, { ...h.context })
-  fresh.setAccountId(A)
-  assert.equal(fresh.readPriceAlerts().rules.length, 50)
-  assert.equal(fresh.readPriceAlerts().events.length, 1)
-  h.advance(31 * DAY)
-  assert.equal(fresh.readPriceAlerts().events.length, 0)
 })
 
 test('dashboard revision invalidates on writes, cross-tab history changes and cache clears without fetching', async () => {

@@ -1,3 +1,5 @@
+import { RARITIES } from './content/price-model'
+
 export type Card = {
   /** Catalogue ID, used for market prices. Never a possession ID. */
   id: string
@@ -24,7 +26,13 @@ export function mapCard(raw: unknown, possession = false): Card | null {
     id,
     title,
     rarity:
-      nonemptyString(entry.snapshot_rarity) ?? nonemptyString(source.rarity),
+      RARITIES.find(
+        rarity =>
+          rarity ===
+          (entry.snapshot_rarity !== undefined
+            ? entry.snapshot_rarity
+            : source.rarity),
+      ) ?? null,
     copyId:
       nonemptyString(entry.user_card_id) ??
       (possession && nested ? nonemptyString(entry.id) : null),

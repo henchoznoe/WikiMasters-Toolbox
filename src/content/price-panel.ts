@@ -1,3 +1,4 @@
+import { setLoadingText } from './loading'
 import { currentPriceContext } from './price-context'
 import {
   createPriceInsights,
@@ -16,32 +17,36 @@ import { getVisiblePriceCards } from './prices'
 import { createRarityBadge } from './rarity'
 
 export function createPriceControls(): HTMLElement {
-  const details = document.createElement('details')
+  const details = document.createElement('section')
   details.className = 'wm-price-controls'
-  const summary = document.createElement('summary')
-  summary.textContent = 'Prix'
-  summary.dataset.priceControlsSummary = '1'
+  details.setAttribute('aria-label', 'Prix des cartes de cette page')
+  const overview = document.createElement('div')
+  overview.className = 'wm-price-overview'
+  overview.dataset.priceOverview = '1'
+  overview.setAttribute('aria-live', 'polite')
+  const intro = document.createElement('p')
+  intro.className = 'wm-note'
+  intro.textContent =
+    'Cartes de cette page · choisissez les raretés à actualiser'
+  const freshness = document.createElement('p')
+  freshness.className = 'wm-price-context'
+  freshness.dataset.priceContext = '1'
   const controls = document.createElement('div')
   controls.className = 'wm-price-controls-body'
-  const scope = document.createElement('select')
-  scope.setAttribute('aria-label', 'Périmètre d’actualisation des prix')
-  scope.dataset.priceScope = '1'
-  for (const [value, label] of [['page', 'Cartes de cette page']]) {
-    const option = document.createElement('option')
-    option.value = value
-    option.textContent = label
-    scope.append(option)
-  }
   const rarities = document.createElement('div')
   rarities.className = 'wm-price-rarities'
   for (const rarity of RARITIES) {
     const button = document.createElement('button')
     button.type = 'button'
-    button.className = 'wm-price-rarity'
+    button.className = 'wm-price-rarity wm-rarity-surface'
+    button.dataset.rarity = rarity.toLowerCase()
     button.dataset.priceFilter = rarity
     button.setAttribute('aria-pressed', 'true')
     button.setAttribute('aria-label', `Inclure ${rarity}`)
-    button.append(createRarityBadge(rarity))
+    const count = document.createElement('span')
+    count.className = 'wm-rarity-count'
+    count.dataset.priceRarityCount = rarity
+    button.append(createRarityBadge(rarity), count)
     button.addEventListener('click', () => {
       button.setAttribute(
         'aria-pressed',
@@ -52,13 +57,13 @@ export function createPriceControls(): HTMLElement {
     rarities.append(button)
   }
   const forceLabel = document.createElement('label')
-  forceLabel.className = 'wm-note'
+  forceLabel.className = 'wm-setting-row'
   const force = document.createElement('input')
   force.type = 'checkbox'
   force.dataset.priceForce = '1'
   forceLabel.append(force, ' Actualiser les prix en cache')
   const capLabel = document.createElement('label')
-  capLabel.className = 'wm-note'
+  capLabel.className = 'wm-setting-row'
   capLabel.textContent = 'Requêtes max '
   const cap = document.createElement('input')
   cap.type = 'number'
@@ -103,18 +108,23 @@ export function createPriceControls(): HTMLElement {
   state.dataset.priceBatch = '1'
   state.className = 'wm-note'
   state.setAttribute('role', 'status')
+  const settings = document.createElement('details')
+  settings.className = 'wm-price-settings'
+  const settingsHeading = document.createElement('summary')
+  settingsHeading.textContent = 'Options d’actualisation'
+  settings.append(settingsHeading, forceLabel, capLabel)
   controls.append(
-    scope,
+    overview,
+    intro,
     rarities,
-    forceLabel,
-    capLabel,
+    freshness,
     actions,
     progress,
     state,
+    settings,
   )
   controls.append(createPriceInsights())
-  details.append(summary, controls)
-  scope.addEventListener('change', renderPricePanel)
+  details.append(controls)
   force.addEventListener('change', renderPricePanel)
   return details
 }
@@ -135,9 +145,8 @@ export function renderPricePanel(): void {
   )
   const start = root.querySelector<HTMLButtonElement>('[data-price-start]')
   const stop = root.querySelector<HTMLButtonElement>('[data-price-stop]')
-  const scope = root.querySelector<HTMLSelectElement>('[data-price-scope]')
   const force = root.querySelector<HTMLInputElement>('[data-price-force]')
-  if (!text || !progress || !start || !stop || !scope) return
+  if (!text || !progress || !start || !stop) return
   const active = new Set(
     [...root.querySelectorAll<HTMLButtonElement>('[data-price-filter]')]
       .filter(button => button.getAttribute('aria-pressed') === 'true')
@@ -155,15 +164,58 @@ export function renderPricePanel(): void {
       : needsPriceForContext(id, currentPriceContext()),
   ).length
   const limit = priceRequestLimit()
-  text.textContent =
+  const batchText =
     state.total || state.cancelled
-      ? `${state.done} / ${state.total} · ${state.running ? '…' : state.cancelled ? 'arrêté' : state.done < state.total ? 'en pause' : '✓'}${state.failed ? ` · ${state.failed} !` : ''}${state.skipped ? ` · ${state.skipped} ignorées` : ''}${limit ? ` · ${limit}` : ''}`
+      ? `${state.done} / ${state.total} · ${state.running ? 'en cours' : state.cancelled ? 'arrêté' : state.done < state.total ? 'en pause' : '✓'}${state.failed ? ` · ${state.failed} !` : ''}${state.skipped ? ` · ${state.skipped} ignorées` : ''}${limit ? ` · ${limit}` : ''}`
       : `${pending} / ${ids.length} cartes${limit ? ` · ${limit}` : ''}`
+  setLoadingText(text, batchText, state.running)
   text.title = `Récapitulatif uniquement · 1 requête / 650 ms · 200 / heure par onglet · actualisation ≥1 min · « Arrêter » termine la lecture actuelle ; les lectures automatiques en file pour les cartes visibles sont indépendantes.`
   start.textContent =
     currentPriceContext() === 'decision'
       ? 'Actualiser avant de décider'
-      : 'Charger'
+      : 'Actualiser les prix'
+  const context = root.querySelector<HTMLElement>('[data-price-context]')
+  if (context)
+    context.textContent =
+      currentPriceContext() === 'decision'
+        ? 'Marché / échange · seuil de fraîcheur 15 min'
+        : 'Lecture automatique des cartes visibles · cache 24 h'
+  const overview = root.querySelector<HTMLElement>('[data-price-overview]')
+  if (overview) {
+    const allIds = [...new Set(cards.map(card => card.id))]
+    const unknown = [
+      ...document.querySelectorAll<HTMLElement>('[data-wm-toolbox-price]'),
+    ].filter(host => !host.dataset.wmToolboxPrice).length
+    const stats = [
+      [allIds.length, 'cartes identifiées'],
+      [pending, 'à actualiser'],
+      [unknown, 'identités inconnues'],
+    ] as const
+    const key = JSON.stringify(stats)
+    if (overview.dataset.key !== key) {
+      overview.dataset.key = key
+      overview.replaceChildren(
+        ...stats.map(([value, label]) => {
+          const stat = document.createElement('div')
+          const count = document.createElement('strong')
+          count.textContent = new Intl.NumberFormat('fr-FR').format(value)
+          const caption = document.createElement('span')
+          caption.textContent = label
+          stat.append(count, caption)
+          return stat
+        }),
+      )
+    }
+  }
+  for (const count of root.querySelectorAll<HTMLElement>(
+    '[data-price-rarity-count]',
+  )) {
+    const next = String(
+      cards.filter(card => card.rarity === count.dataset.priceRarityCount)
+        .length,
+    )
+    if (count.textContent !== next) count.textContent = next
+  }
   text.title +=
     ' · album : 24 h ; vente / échange : 15 min · seuls les prix plus anciens sont actualisés, sauf si « Actualiser les prix en cache » est coché.'
   start.disabled = state.running || !pending || !!limit

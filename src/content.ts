@@ -7,7 +7,6 @@ import {
 } from './content/compatibility'
 import { renderDataControls } from './content/data-panel'
 import { resetToolboxPanel, syncToolboxPanel } from './content/panel'
-import { setPriceAlertCallback } from './content/price-alerts'
 import {
   closePriceInspector,
   renderPriceInspector,
@@ -49,7 +48,6 @@ function scheduleRender(): void {
     renderDataControls()
   }, 80)
 }
-setPriceAlertCallback(scheduleRender)
 setPriceRenderCallback(scheduleRender)
 setRequestCallback(scheduleRender)
 onCompatibilityChange(scheduleRender)

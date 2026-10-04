@@ -4,11 +4,11 @@
 
 WikiMasters Toolbox is a Chrome Manifest V3 extension dedicated to card prices for WikiMasters. Every option must work with a free game account. Use only price data available to that account; do not add subscription-dependent endpoints, upgrade prompts or paid-account branches.
 
-Keep the scope limited to price references, graphs, freshness, refresh, local observations, concluded-sale estimates, diagnostics and price alerts. Automated reads for those tools are in scope. Do not add gameplay actions, background gameplay schedules, collection management, native form prefilling or write endpoints. Do not claim official approval or compliance of the price tools with the game's rules.
+Keep the scope limited to price references, graphs, freshness, refresh, local observations, concluded-sale estimates, diagnostics. Automated reads for those tools are in scope. Do not add gameplay actions, background gameplay schedules, collection management, native form prefilling or write endpoints. Do not claim official approval or compliance of the price tools with the game's rules.
 
-All user-facing Toolbox text must be in French, including tooltips, confirmations, errors and accessibility labels. Format displayed numbers and dates using French conventions. Keep code identifiers, protocol values, storage keys and technical documentation in English; `ROADMAP.md` is in French. Preserve native card titles and user-provided content.
+All user-facing Toolbox text must be in French, including tooltips, confirmations, errors and accessibility labels. Format displayed numbers and dates using French conventions. Display dates and times in the Bern time zone (`Europe/Zurich`, UTC+2 in summer and UTC+1 in winter). Keep code identifiers, protocol values, storage keys and technical documentation in English; `ROADMAP.md` is in French. Preserve native card titles and user-provided content.
 
-The interface should remain compact and consistent with the game. Use `…` for loading, concise status messages and existing Toolbox styles. Keep the README as a project overview with installation, contribution and delivery instructions; planned work belongs in `ROADMAP.md`.
+The interface should remain compact and consistent with the game. Use compact spinning loaders with explicit French loading labels, respect reduced motion, and keep status messages concise with shared Toolbox styles. Keep the README as a project overview with installation, contribution and delivery instructions; planned work belongs in `ROADMAP.md`.
 
 `AGENTS.md` is the single source of repository guidance. `CLAUDE.md` must remain a relative symlink to `AGENTS.md`; edit this file when updating instructions.
 
@@ -18,7 +18,7 @@ The interface should remain compact and consistent with the game. Use `…` for 
 - `src/content.ts` runs in the isolated content-script world and coordinates startup, account changes, SPA navigation and rendering.
 - Keep domain logic in `src/content/`. Register page panels in `routes.ts` and reuse `panel.ts` and shared shadow-root helpers.
 - Use `src/cards.ts` for identity mapping. Catalogue IDs identify price requests. A title match is display-only and must reject ambiguous catalogue or rarity identities.
-- Scope price alerts and concluded-sale samples to the detected account. Cancel relevant work on account or route changes.
+- Scope concluded-sale samples to the detected account. Cancel relevant work on account or route changes.
 - Apply styles through `src/toolbox.css` inside extension shadow roots. Reuse `createRarityBadge` and `.wm-rarity-surface` for colored, textured rarity controls everywhere.
 
 ## Price data

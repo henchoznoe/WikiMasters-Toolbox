@@ -1,5 +1,4 @@
 import { cachePolicies, onCacheChange, writeCache } from './cache'
-import { observePriceAlerts } from './price-alerts'
 import { DECISION_TTL, type PriceContext } from './price-context'
 import {
   appendObservation,
@@ -194,7 +193,6 @@ function save(id: string, row: PriceEntry): void {
   if (entries.size > 1000) entries.delete(entries.keys().next().value as string)
   writeCache('prices', PREFIX + id, row)
   if (row.ok && !row.failed) {
-    observePriceAlerts(id, row.averages, row.fetchedAt)
     try {
       const history: Record<string, Observation[]> = {}
       for (const rarity of RARITIES)
@@ -214,6 +212,9 @@ export { requestLimit as priceRequestLimit } from './requests'
 
 let cacheEpoch = 0
 const pendingPrices = new Map<string, Promise<void>>()
+export function isPriceLoading(id: string): boolean {
+  return pendingPrices.has(id)
+}
 export function requestPriceQuote(id: string, force = false): Promise<void> {
   if (!id || id.length > 200) return Promise.resolve()
   const pending = pendingPrices.get(id)
@@ -257,8 +258,12 @@ export function requestPriceQuote(id: string, force = false): Promise<void> {
     }
   })()
   pendingPrices.set(id, reading)
+  notify()
   void reading.finally(() => {
-    if (pendingPrices.get(id) === reading) pendingPrices.delete(id)
+    if (pendingPrices.get(id) === reading) {
+      pendingPrices.delete(id)
+      notify()
+    }
   })
   return reading
 }

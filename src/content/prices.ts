@@ -1,4 +1,12 @@
+import { resolveCardIdentity } from './card-identity'
+import {
+  pruneCardPriceLayouts,
+  releaseCardPriceSpace,
+  reserveCardPriceSpace,
+  resetCardPriceLayouts,
+} from './card-price-layout'
 import { setCompatibilityIssue } from './compatibility'
+import { setLoadingText } from './loading'
 import {
   cardSelectors,
   parsePageCards,
@@ -7,7 +15,7 @@ import {
 import { mapPriceListing } from './price-comparison'
 import { currentPriceContext } from './price-context'
 import { observePriceListings } from './price-listings'
-import { presentPrice } from './price-presentation'
+import { presentPrice, priceFreshness } from './price-presentation'
 import { requestJson } from './requests'
 import { saleSample } from './sales-model'
 import { observeSaleSamples } from './sales-store'
@@ -18,6 +26,7 @@ import { cardVariantKey, mapCard } from '../cards'
 import { getAccountId } from './account'
 import { openPriceInspector } from './price-inspector'
 import {
+  isPriceLoading,
   needsPrice,
   type PriceQuote,
   readPriceQuote,
@@ -44,13 +53,31 @@ export function getVisiblePriceCards(): Card[] {
   return [
     ...document.querySelectorAll<HTMLElement>('[data-wm-toolbox-card-id]'),
   ].flatMap(element => {
-    const card = resolveVisibleCard(
-      element.dataset.wmToolboxCardTitle ??
-        element.querySelector('h3')?.textContent ??
-        element.querySelector('h2')?.textContent ??
-        null,
-      element.dataset.wmToolboxCardRarity ?? rarityFromElement(element),
-    )
+    const heading = element.querySelector('h3')
+    const modalHeading = element.matches('h2')
+      ? element
+      : element.querySelector('h2')
+    const listingHeading =
+      element.matches('h1') &&
+      marketplaceCard &&
+      normalizeTitle(element.textContent) ===
+        normalizeTitle(marketplaceCard.title)
+    const hints = nativeCardHints(element)
+    const card = listingHeading
+      ? marketplaceCard
+      : resolveVisibleCard(
+          heading?.textContent ??
+            modalHeading?.textContent ??
+            element.getAttribute('title'),
+          heading
+            ? rarityFromElement(element)
+            : modalHeading?.parentElement
+              ? rarityFromElement(modalHeading.parentElement)
+              : (element.textContent?.match(/^(L|UR|SR|R|PC|C)\s*·/)?.[1] ??
+                null),
+          hints.id,
+          hints.shiny,
+        )
     return card ? [card] : []
   })
 }
@@ -81,6 +108,7 @@ export function registerCards(cards: Card[], kind?: string): void {
 }
 
 export function resetRegisteredCards(): void {
+  resetCardPriceLayouts()
   cardsByVariant.clear()
   variantsByTitle.clear()
   marketplaceCard = null
@@ -101,28 +129,63 @@ export function resetRegisteredCards(): void {
 export function resolveVisibleCard(
   title: string | null,
   rarity: string | null,
+  id: string | null = null,
+  shiny: boolean | null = null,
 ): Card | null {
-  const candidates = [
-    ...(variantsByTitle.get(normalizeTitle(title)) ?? []),
-  ].flatMap(key => {
-    const card = cardsByVariant.get(key)
-    return card && (!rarity || card.rarity === rarity) ? [card] : []
-  })
-  // Display-only fallback for DOM without IDs; ambiguity must never pick the last title seen.
-  if (new Set(candidates.map(card => card.id)).size !== 1) return null
-  if (!rarity && new Set(candidates.map(card => card.rarity)).size > 1)
-    return null
-  if (new Set(candidates.map(card => card.shiny)).size > 1) return null
-  return candidates[0] ?? null
+  const cards = id
+    ? [...cardsByVariant.values()]
+    : [...(variantsByTitle.get(normalizeTitle(title)) ?? [])].flatMap(key => {
+        const card = cardsByVariant.get(key)
+        return card ? [card] : []
+      })
+  return resolveCardIdentity(cards, { title, rarity, id, shiny })
+}
+function nativeCardHints(element: HTMLElement): {
+  id: string | null
+  shiny: boolean | null
+} {
+  return {
+    id:
+      element.getAttribute('data-card-id') ??
+      element.getAttribute('data-catalogue-id'),
+    shiny:
+      element.getAttribute('data-is-shiny') === 'true'
+        ? true
+        : element.getAttribute('data-is-shiny') === 'false'
+          ? false
+          : null,
+  }
 }
 
 function updatePriceBadge(badge: HTMLElement, quote: PriceQuote): void {
-  const presentation = presentPrice(quote, currentPriceContext())
+  const presentation = presentPrice(
+    quote,
+    currentPriceContext(),
+    badge.dataset.shiny === 'true',
+  )
   badge.dataset.status = presentation.status
+  const freshness = priceFreshness(quote, currentPriceContext())
+  const detail = badge.querySelector<HTMLElement>('.wm-price-state')
+  if (detail) {
+    const next =
+      badge.dataset.shiny === 'true'
+        ? 'Variante brillante · prix inconnu'
+        : currentPriceContext() === 'decision'
+          ? freshness.text
+          : ''
+    if (detail.textContent !== next) detail.textContent = next
+    detail.hidden = !next
+  }
+  badge.dataset.warning = String(freshness.warning)
   const value = badge.querySelector<HTMLElement>('.wm-price-value')
   const age = badge.querySelector<HTMLElement>('.wm-price-age')
-  if (value && value.textContent !== presentation.value)
-    value.textContent = presentation.value
+  if (value)
+    setLoadingText(
+      value,
+      presentation.value,
+      presentation.status === 'loading' ||
+        isPriceLoading(badge.dataset.cardId ?? ''),
+    )
   if (age) {
     const next = presentation.age ? `· ${presentation.age}` : ''
     if (age.textContent !== next) age.textContent = next
@@ -154,22 +217,73 @@ function createPriceBadge(large = false): HTMLElement {
   const age = document.createElement('span')
   age.className = 'wm-price-age'
   age.hidden = true
-  badge.append(value, age)
+  const line = document.createElement('span')
+  line.className = 'wm-price-badge-main'
+  line.append(value, age)
+  const detail = document.createElement('span')
+  detail.className = 'wm-price-state'
+  detail.hidden = true
+  badge.append(line, detail)
   return badge
 }
 
+function showUnknownPrice(badge: HTMLButtonElement): void {
+  badge.disabled = true
+  delete badge.dataset.cardId
+  badge.dataset.warning = 'true'
+  badge.setAttribute(
+    'aria-label',
+    'Prix inconnu · identité ou rareté ambiguë · aucune lecture',
+  )
+  badge.dataset.status = 'unknown-rarity'
+  const value = badge.querySelector('.wm-price-value')
+  const age = badge.querySelector<HTMLElement>('.wm-price-age')
+  const detail = badge.querySelector<HTMLElement>('.wm-price-state')
+  if (value) setLoadingText(value as HTMLElement, 'Prix inconnu', false)
+  if (age) age.hidden = true
+  if (detail) {
+    detail.textContent = 'Identité ou rareté ambiguë'
+    detail.hidden = false
+  }
+  badge.title =
+    'Carte non identifiée avec certitude · aucune lecture ni prix déduit'
+}
+function renderUnknownInline(anchor: HTMLElement): void {
+  delete anchor.dataset.wmToolboxCardId
+  delete anchor.dataset.wmToolboxCardTitle
+  delete anchor.dataset.wmToolboxCardRarity
+  visiblePriceObserver.unobserve(anchor)
+  let host = anchor.nextElementSibling as HTMLElement | null
+  if (!host?.hasAttribute('data-wm-toolbox-inline-price')) {
+    host = document.createElement('span')
+    host.dataset.wmToolboxInlinePrice = '1'
+    createToolboxRoot(host).append(createPriceBadge())
+    anchor.after(host)
+  }
+  host.dataset.wmToolboxPrice = ''
+  const badge = host.shadowRoot?.firstElementChild as HTMLButtonElement | null
+  if (badge) showUnknownPrice(badge)
+}
+
 function rarityFromElement(card: Element): string | null {
-  for (const element of card.querySelectorAll('span, div')) {
-    const text = element.textContent?.trim()
-    if (text && /^(L|UR|SR|R|PC|C)$/.test(text)) return text
-  }
-  for (const element of card.querySelectorAll('[style]')) {
-    const match = element
-      .getAttribute('style')
-      ?.match(/--color-rarity-(l|ur|sr|r|pc|c)\b/i)
-    if (match) return match[1].toUpperCase()
-  }
-  return null
+  const labels = new Set(
+    [...card.querySelectorAll('span, div')].flatMap(element => {
+      const text = element.textContent?.trim()
+      return text && /^(L|UR|SR|R|PC|C)$/.test(text) ? [text] : []
+    }),
+  )
+  if (labels.size) return labels.size === 1 ? [...labels][0] : null
+  const styles = new Set(
+    [...card.querySelectorAll('[style]')].flatMap(element => {
+      const matches = [
+        ...(element.getAttribute('style') ?? '').matchAll(
+          /--color-rarity-(l|ur|sr|r|pc|c)\b/gi,
+        ),
+      ]
+      return matches.map(match => match[1].toUpperCase())
+    }),
+  )
+  return styles.size === 1 ? [...styles][0] : null
 }
 
 function getCardElement(heading: Element): HTMLElement | null {
@@ -184,24 +298,31 @@ function renderBadge(card: HTMLElement, identity: Card): void {
     cardSelectors.stats,
   )
   if (!stats) return
-  let host = card.querySelector<HTMLElement>('[data-wm-toolbox-price]')
+  const container =
+    card.closest<HTMLElement>('a[href^="/marketplace/"]') ?? card
+  let host = container.querySelector<HTMLElement>('[data-wm-toolbox-price]')
   if (!host) {
     host = document.createElement('div')
     host.dataset.wmToolboxPrice = id
     createToolboxRoot(host).append(createPriceBadge())
   }
-  host.dataset.wmToolboxPriceLayout = 'footer'
-  if (host.parentElement !== stats || host !== stats.lastElementChild)
-    stats.append(host)
+  const marketLink = card.closest<HTMLElement>('a[href^="/marketplace/"]')
+  const target = marketLink ?? stats
+  host.dataset.wmToolboxPriceLayout = marketLink ? 'market' : 'footer'
+  if (host.parentElement !== target || host !== target.lastElementChild)
+    target.append(host)
   const badge = host.shadowRoot?.firstElementChild as HTMLElement | null
   if (!badge) return
   host.dataset.wmToolboxPrice = id
   const quote = readPriceQuote(id, rarity)
+  ;(badge as HTMLButtonElement).disabled = false
   badge.dataset.cardId = id
   badge.dataset.rarity = rarity ?? ''
   badge.dataset.cardTitle = identity.title
   badge.dataset.shiny = String(identity.shiny)
   updatePriceBadge(badge, quote)
+  if (marketLink) releaseCardPriceSpace(host)
+  else reserveCardPriceSpace(card, host)
   if (needsPrice(id)) {
     visiblePriceObserver.observe(card)
   }
@@ -220,6 +341,7 @@ const visiblePriceObserver = new IntersectionObserver(
 )
 
 export function renderCards(): void {
+  pruneCardPriceLayouts()
   if (
     !/^\/(collection|global-collection|marketplace|trades)(\/|$)/.test(
       location.pathname,
@@ -236,10 +358,37 @@ export function renderCards(): void {
     const identity = resolveVisibleCard(
       heading.textContent,
       rarityFromElement(card),
+      nativeCardHints(card).id,
+      nativeCardHints(card).shiny,
     )
     if (!identity) {
       delete card.dataset.wmToolboxCardId
-      card.querySelector('[data-wm-toolbox-price]')?.remove()
+      delete card.dataset.wmToolboxCardTitle
+      delete card.dataset.wmToolboxCardRarity
+      visiblePriceObserver.unobserve(card)
+      const stats = heading.parentElement?.querySelector(cardSelectors.stats)
+      if (stats) {
+        const target =
+          card.closest<HTMLElement>('a[href^="/marketplace/"]') ?? stats
+        const container = target === stats ? card : target
+        let host = container.querySelector<HTMLElement>(
+          '[data-wm-toolbox-price]',
+        )
+        if (!host) {
+          host = document.createElement('div')
+          createToolboxRoot(host).append(createPriceBadge())
+        }
+        host.dataset.wmToolboxPrice = ''
+        host.dataset.wmToolboxPriceLayout =
+          target === stats ? 'footer' : 'market'
+        if (host.parentElement !== target || host !== target.lastElementChild)
+          target.append(host)
+        const badge = host.shadowRoot
+          ?.firstElementChild as HTMLButtonElement | null
+        if (badge) showUnknownPrice(badge)
+        if (target === stats) reserveCardPriceSpace(card, host)
+        else releaseCardPriceSpace(host)
+      }
       continue
     }
     card.dataset.wmToolboxCardId = identity.id
@@ -262,7 +411,10 @@ export function renderCards(): void {
       heading.textContent,
       rarityFromElement(parent),
     )
-    if (!card) continue
+    if (!card) {
+      renderUnknownInline(heading)
+      continue
+    }
     const hasFooter = [
       ...(parent.parentElement?.querySelectorAll<HTMLElement>(
         '[data-wm-toolbox-price-layout="footer"]',
@@ -281,6 +433,7 @@ export function renderCards(): void {
       if (!rarity) continue
       const card = resolveVisibleCard(pill.title, rarity)
       if (card) renderInlinePrice(pill, card)
+      else renderUnknownInline(pill)
     }
   }
 }
@@ -299,6 +452,7 @@ function renderInlinePrice(anchor: HTMLElement, identity: Card): void {
   anchor.dataset.wmToolboxCardRarity = identity.rarity ?? ''
   const badge = host.shadowRoot?.firstElementChild as HTMLElement | null
   if (!badge) return
+  ;(badge as HTMLButtonElement).disabled = false
   badge.dataset.cardId = identity.id
   badge.dataset.rarity = identity.rarity ?? ''
   badge.dataset.cardTitle = identity.title
@@ -342,12 +496,13 @@ export function renderMarketplace(): void {
   const badge = host.shadowRoot?.firstElementChild as HTMLElement | null
   if (!badge) return
   const quote = readPriceQuote(id, rarity)
+  ;(badge as HTMLButtonElement).disabled = false
   badge.dataset.cardId = id
   badge.dataset.rarity = rarity ?? ''
   badge.dataset.cardTitle = identity.title
   badge.dataset.shiny = String(identity.shiny)
   updatePriceBadge(badge, quote)
-  if (needsPrice(id)) void requestPriceQuote(id)
+  if (rarity && needsPrice(id)) void requestPriceQuote(id)
 }
 
 let hydration: AbortController | null = null

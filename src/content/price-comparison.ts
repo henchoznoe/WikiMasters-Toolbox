@@ -1,7 +1,7 @@
 import type { Auction } from './market-model'
 import { mapAuction, priceDifference } from './market-model'
 import { RARITIES } from './price-model'
-import { presentPrice } from './price-presentation'
+import { presentPrice, priceFreshness } from './price-presentation'
 import type { PriceQuote } from './price-store'
 
 export type PriceListing = Pick<
@@ -52,7 +52,7 @@ export function listingComparison(
           ['Offre actuelle', row.bid],
         ]
   return {
-    text: `${values.map(([label, value]) => `${label} ${value ?? '—'} W · écart à la moyenne ${value === null ? '—' : priceDifference(value, quote)}`).join(' | ')} · moyenne seule · référence ${reference.value}${reference.age ? ` · ${reference.age}` : ''}`,
+    text: `${values.map(([label, value]) => `${label} ${value ?? '—'} W · écart à la moyenne ${value === null ? '—' : priceDifference(value, quote)}`).join(' | ')} · moyenne seule · référence ${reference.value}${reference.age ? ` · ${reference.age}` : ''} · ${priceFreshness(quote, 'decision').text}`,
     hint: `${reference.hint} · les mises de départ et offres ne sont pas des ventes conclues · pourcentage indisponible si la référence est nulle`,
   }
 }
