@@ -32,6 +32,7 @@ L’extension est indépendante et n’est pas approuvée par WikiMasters. Ses l
 - [ ] **PRICE-06 · P1 — Prix des brillantes.** Ne proposer une estimation distincte que si des ventes conclues de la variante exacte suffisent ; la moyenne native seule ne justifie aucune surcote.
 - [ ] **PRICE-07 · P2 — Export des observations de prix.** Exporter les références publiques locales et leur méthode en CSV/JSON, sans données de compte ni inventaire.
 - [ ] **PRICE-08 · P2 — Accessibilité et performance.** Vérifier focus, lecteur d’écran, contraste, longs titres et fluidité des badges et graphes sur les grandes pages.
+- [ ] **PRICE-09 · P2 — Départ et activité des enchères.** Dans « Mes ventes », afficher sous chaque annonce le prix de départ, le nombre d’enchères et, lorsque deux observations permettent la comparaison, la hausse en W et les enchères supplémentaires depuis la dernière visite. Idée inspirée de la [PR #39 de WikiMastersTools-kzfamily](https://github.com/qkerman/WikiMastersTools-kzfamily/pull/39). Lire d’abord les informations déjà présentes dans la page ; compléter les annonces visibles par des GET via la file et le budget partagés. Prévoir un cache par compte et annonce, un âge visible, des états inconnus explicites et une actualisation limitée lorsque la mise affichée change ou que les données vieillissent. Distinguer mise de départ, mise actuelle et vente conclue ; ces observations ne rejoignent pas l’échantillon des ventes conclues. Aucun placement d’enchère ni aucune modification d’annonce.
 
 ## Principes de données
 
