@@ -1,28 +1,24 @@
 import { getAccountId, onAccountChange, setAccountId } from './content/account'
+import { cleanCaches, onCacheChange } from './content/cache'
 import {
-  getCollectionState,
-  invalidateCollection,
-  observeCollection,
-  onCollectionChange,
-  refreshCollectionIfNeeded,
-  syncCollectionFromStorage,
-} from './content/collection'
+  onCompatibilityChange,
+  resetCompatibility,
+  setCompatibilityIssue,
+} from './content/compatibility'
+import { renderDataControls } from './content/data-panel'
+import { resetToolboxPanel, syncToolboxPanel } from './content/panel'
 import {
-  onSelectionChange,
-  setDiscardRefreshCallback,
-} from './content/collection-actions'
-import { renderCollectionPanel } from './content/collection-panel'
+  closePriceInspector,
+  renderPriceInspector,
+} from './content/price-inspector'
 import {
-  AUTO_KEY,
-  getPrefs,
-  MANUAL_LIMIT_KEY,
-  scheduleAuto,
-  syncManualLimitFromStorage,
-  syncPrefsFromStorage,
-} from './content/packs'
-import { refreshPacksControls } from './content/packs-panel'
-import { syncToolboxPanel } from './content/panel'
+  clearPriceListings,
+  observePriceListings,
+} from './content/price-listings'
+import { renderPricePanel } from './content/price-panel'
+import { cancelPriceBatch, syncPricesFromStorage } from './content/price-store'
 import {
+  cancelRouteRead,
   hydrateRoute,
   registerCards,
   renderCards,
@@ -30,108 +26,90 @@ import {
   resetRegisteredCards,
   setPriceRenderCallback,
 } from './content/prices'
+import { cancelRequests, setRequestCallback } from './content/requests'
 import { toolboxPages } from './content/routes'
-import { renderRunSummary } from './content/run-summary'
+import { type SaleSample, validSample } from './content/sales-model'
+import { observeSaleSamples } from './content/sales-store'
 import { isCard } from './content/shared'
-import {
-  recordPack,
-  renderStats,
-  STATS_PREFIX,
-  scheduleDailyReset,
-} from './content/stats'
 
 const contentWindow = window as Window & {
   __wmToolboxContentInstalled?: boolean
 }
-
 let renderTimer: ReturnType<typeof setTimeout> | null = null
 function scheduleRender(): void {
-  if (renderTimer) clearTimeout(renderTimer)
+  if (renderTimer) return
   renderTimer = setTimeout(() => {
     renderTimer = null
     renderCards()
     renderMarketplace()
     syncToolboxPanel(location.pathname, toolboxPages)
-    renderRunSummary()
-    renderCollectionPanel()
+    renderPricePanel()
+    renderPriceInspector()
+    renderDataControls()
   }, 80)
 }
 setPriceRenderCallback(scheduleRender)
-onSelectionChange(scheduleRender)
-setDiscardRefreshCallback(() => {
-  if (/^\/collection(\/|$)/.test(location.pathname)) location.reload()
-})
-onCollectionChange(() => {
-  registerCards([...getCollectionState().cards])
-  scheduleRender()
-})
+setRequestCallback(scheduleRender)
+onCompatibilityChange(scheduleRender)
+onCacheChange(scheduleRender)
 onAccountChange(() => {
+  cancelRouteRead()
+  cancelPriceBatch()
+  resetToolboxPanel()
+  closePriceInspector()
   resetRegisteredCards()
-  registerCards([...getCollectionState().cards])
-  renderStats()
-  renderRunSummary()
-  scheduleDailyReset()
   scheduleRender()
-  if (/^\/collection(\/|$)/.test(location.pathname))
-    refreshCollectionIfNeeded(true)
+  void hydrateRoute()
 })
 
 if (!contentWindow.__wmToolboxContentInstalled) {
   contentWindow.__wmToolboxContentInstalled = true
   window.addEventListener('wm-toolbox:data', (event: Event) => {
     try {
-      const data = JSON.parse((event as CustomEvent<string>).detail) as {
-        kind?: string
-        cards?: unknown[]
-        accountId?: unknown
-        total?: unknown
-      }
+      const data = JSON.parse((event as CustomEvent<string>).detail)
       if (data.kind === 'account') {
         setAccountId(data.accountId)
         return
       }
       if (data.accountId !== getAccountId()) return
-      if (data.kind === 'collection-changed') {
-        invalidateCollection()
-        return
-      }
-      if (data.kind === 'collection-total') {
-        observeCollection([], data.total)
-        return
-      }
-      if (Array.isArray(data.cards)) {
-        const cards = data.cards.filter(isCard)
-        if (data.kind === 'collection') observeCollection(cards)
-        registerCards(cards, data.kind)
-        if (data.kind === 'pack') void recordPack(cards)
-      }
+      if (data.kind === 'price-listings') observePriceListings(data.listings)
+      else if (data.kind === 'sale-samples' && Array.isArray(data.samples))
+        observeSaleSamples(
+          data.samples
+            .slice(0, 1000)
+            .filter((row: unknown): row is SaleSample => validSample(row)),
+        )
+      else if (data.kind === 'compatibility' && typeof data.source === 'string')
+        setCompatibilityIssue(
+          data.source,
+          data.compatible === true
+            ? null
+            : 'Format des données du jeu modifié ; rechargez la page',
+        )
+      else if (Array.isArray(data.cards))
+        registerCards(data.cards.filter(isCard), data.kind)
+      scheduleRender()
     } catch {
       /* Invalid event. */
     }
   })
   window.addEventListener('storage', event => {
-    syncCollectionFromStorage(event.key)
-    if (event.key === `${STATS_PREFIX}${getAccountId()}`) {
-      renderStats()
-      scheduleDailyReset()
-      return
-    }
-    if (event.key === MANUAL_LIMIT_KEY) {
-      syncManualLimitFromStorage()
-      refreshPacksControls()
-      return
-    }
-    if (event.key !== AUTO_KEY) return
-    syncPrefsFromStorage()
-    refreshPacksControls()
+    syncPricesFromStorage(event.key)
+    scheduleRender()
   })
-  let previousPath = location.pathname
+  let previousPath = location.pathname + location.search
   const observer = new MutationObserver(() => {
-    if (location.pathname !== previousPath) {
-      previousPath = location.pathname
+    if (location.pathname + location.search !== previousPath) {
+      cancelRouteRead()
+      cancelPriceBatch()
+      cancelRequests()
+      resetRegisteredCards()
+      clearPriceListings()
+      resetCompatibility()
+      resetToolboxPanel()
+      closePriceInspector()
+      previousPath = location.pathname + location.search
       void hydrateRoute()
-      if (/^\/collection(\/|$)/.test(previousPath))
-        refreshCollectionIfNeeded(true)
     }
     scheduleRender()
   })
@@ -140,25 +118,17 @@ if (!contentWindow.__wmToolboxContentInstalled) {
       requestAnimationFrame(start)
       return
     }
+    cleanCaches()
     observer.observe(document.body, { childList: true, subtree: true })
     scheduleRender()
     void hydrateRoute()
-    scheduleDailyReset()
-    if (getPrefs().enabled) scheduleAuto()
   }
+  // Update age labels locally. No timer performs gameplay actions.
   window.setInterval(() => {
-    if (document.visibilityState === 'visible') {
-      scheduleRender()
-      if (/^\/collection(\/|$)/.test(location.pathname))
-        refreshCollectionIfNeeded()
-    }
+    if (document.visibilityState === 'visible') scheduleRender()
   }, 60_000)
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      scheduleRender()
-      if (/^\/collection(\/|$)/.test(location.pathname))
-        refreshCollectionIfNeeded()
-    }
+    if (document.visibilityState === 'visible') scheduleRender()
   })
   start()
 }

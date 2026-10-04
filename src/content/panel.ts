@@ -1,9 +1,11 @@
+import { createDataControls } from './data-panel'
 import { createToolboxRoot } from './shared'
 
 export type ToolboxPage = {
   id: string
   label: string
   matches: (path: string) => boolean
+  read?: () => Promise<void>
   createBody: () => HTMLElement
   onMount?: () => void
   onHide?: () => void
@@ -20,7 +22,7 @@ function readPanelCollapsed(): boolean {
   } catch {
     /* Storage unavailable. */
   }
-  return window.matchMedia('(max-width: 600px)').matches
+  return false
 }
 
 function writePanelCollapsed(collapsed: boolean): void {
@@ -61,7 +63,7 @@ export function syncToolboxPanel(
   const panel = document.createElement('section')
   panel.setAttribute(
     'aria-label',
-    `Toolbox ${page.label.toLowerCase()} controls`,
+    `Toolbox ${page.label.toLowerCase()} : commandes`,
   )
   panel.className = 'wm-panel'
   const initiallyExpanded = !readPanelCollapsed()
@@ -71,7 +73,7 @@ export function syncToolboxPanel(
   header.className = 'wm-panel-header'
   const title = document.createElement('h2')
   title.className = 'wm-panel-title'
-  title.textContent = 'Toolbox'
+  title.textContent = 'Toolbox · Prix'
   const mark = document.createElement('span')
   mark.className = 'wm-panel-mark'
   mark.textContent = page.label
@@ -80,24 +82,31 @@ export function syncToolboxPanel(
   disclosure.className = 'wm-panel-disclosure'
   disclosure.setAttribute(
     'aria-label',
-    `${initiallyExpanded ? 'Hide' : 'Show'} Toolbox controls`,
+    `${initiallyExpanded ? 'Masquer' : 'Afficher'} les commandes Toolbox`,
   )
   disclosure.setAttribute('aria-expanded', String(initiallyExpanded))
-  disclosure.textContent = initiallyExpanded ? 'Hide' : 'Show'
+  disclosure.textContent = initiallyExpanded ? 'Réduire' : 'Ouvrir'
   disclosure.addEventListener('click', () => {
     const expanded = panel.classList.toggle('wm-panel-open')
     writePanelCollapsed(!expanded)
     if (!expanded) page.onHide?.()
     disclosure.setAttribute(
       'aria-label',
-      `${expanded ? 'Hide' : 'Show'} Toolbox controls`,
+      `${expanded ? 'Masquer' : 'Afficher'} les commandes Toolbox`,
     )
     disclosure.setAttribute('aria-expanded', String(expanded))
-    disclosure.textContent = expanded ? 'Hide' : 'Show'
+    disclosure.textContent = expanded ? 'Réduire' : 'Ouvrir'
   })
   header.append(title, mark, disclosure)
-  panel.append(header, page.createBody())
+  const body = page.createBody()
+  body.append(createDataControls())
+  panel.append(header, body)
   createToolboxRoot(host).append(panel)
   document.body.append(host)
   page.onMount?.()
+}
+
+export function resetToolboxPanel(): void {
+  document.querySelector('[data-wm-toolbox-panel]')?.remove()
+  activePage = null
 }

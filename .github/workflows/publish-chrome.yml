@@ -17,17 +17,23 @@ jobs:
     runs-on: ubuntu-latest
     environment: chrome-web-store
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
       - uses: pnpm/action-setup@v6
         with:
           version: 12.4.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Set package version from release tag
+        run: |
+          node scripts/set-version.mjs "${RELEASE_TAG#v}"
+          pnpm exec biome format --write package.json manifest.json
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
       - run: pnpm package
       - run: node scripts/publish-chrome.mjs
         env:
