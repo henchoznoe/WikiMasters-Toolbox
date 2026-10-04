@@ -137,6 +137,7 @@ test('batches skip fresh entries, deduplicate copies, cap requests and stop afte
       'startPriceBatch',
       'cancelPriceBatch',
       'getPriceBatch',
+      'isPriceLoading',
     ],
     h.context,
   )
@@ -149,9 +150,16 @@ test('batches skip fresh entries, deduplicate copies, cap requests and stop afte
     2,
   )
   while (!release) await new Promise(resolve => setImmediate(resolve))
+  assert.equal(h.context.isPriceLoading('a'), true)
   h.context.cancelPriceBatch()
+  assert.equal(
+    h.context.isPriceLoading('a'),
+    true,
+    'stopping the batch must not hide an in-flight read',
+  )
   release()
   await batch
+  assert.equal(h.context.isPriceLoading('a'), false)
   assert.equal(calls, 2)
   assert.equal(h.context.getPriceBatch().cancelled, true)
   await h.context.startPriceBatch(['b', 'b', 'c', 'd'], false, 1)

@@ -1,14 +1,17 @@
 import { getAccountId } from './account'
+import { setLoadingText } from './loading'
 import {
   readPriceAlerts,
   removePriceAlert,
   setPriceAlert,
 } from './price-alerts'
 import { currentPriceContext, priceTooOld } from './price-context'
-import { type Observation, RARITIES } from './price-model'
-import { presentPrice } from './price-presentation'
+import { createPriceGraph } from './price-graph'
+import { RARITIES } from './price-model'
+import { presentPrice, priceFreshness } from './price-presentation'
 import {
   canRefreshPrice,
+  isPriceLoading,
   readPriceHistory,
   readPriceQuote,
   requestPriceQuote,
@@ -68,6 +71,7 @@ export function openPriceInspector(
       if (selected) selected.rarity = r
       renderPriceInspector()
     })
+    control.className = 'wm-price-rarity wm-rarity-surface'
     control.dataset.rarity = r.toLowerCase()
     control.dataset.priceRarity = r
     control.append(createRarityBadge(r))
@@ -75,6 +79,10 @@ export function openPriceInspector(
   }
   const value = document.createElement('p')
   value.dataset.priceInspectorValue = '1'
+  const freshness = document.createElement('p')
+  freshness.className = 'wm-price-freshness'
+  freshness.dataset.priceFreshness = '1'
+  freshness.setAttribute('role', 'status')
   const history = document.createElement('div')
   history.dataset.priceHistory = '1'
   const sample = document.createElement('div')
@@ -86,6 +94,8 @@ export function openPriceInspector(
       void requestPriceQuote(id, true)
     }),
   )
+  if (actions.firstElementChild)
+    actions.firstElementChild.className = 'wm-primary-button'
   actions.firstElementChild?.setAttribute('data-price-refresh', '1')
   const alert = document.createElement('details')
   alert.className = 'wm-price-method'
@@ -190,10 +200,11 @@ export function openPriceInspector(
     header,
     rarities,
     value,
+    freshness,
     actions,
-    alert,
-    sample,
     history,
+    sample,
+    alert,
     method,
   )
   root.append(dialog)
@@ -222,58 +233,6 @@ function button(
   result.addEventListener('click', action)
   return result
 }
-function graph(points: Observation[]): SVGSVGElement {
-  const ns = 'http://www.w3.org/2000/svg'
-  const svg = document.createElementNS(ns, 'svg')
-  svg.setAttribute('viewBox', '0 0 280 88')
-  svg.setAttribute('role', 'img')
-  svg.setAttribute(
-    'aria-label',
-    'Observations locales du prix moyen ; les jours manquants restent des trous',
-  )
-  const actual = points.filter(point => point.average !== null)
-  const first = points[0]?.at ?? Date.now()
-  const last = points.at(-1)?.at ?? first
-  const min = Math.min(...actual.map(point => point.average as number))
-  const max = Math.max(...actual.map(point => point.average as number))
-  const position = (point: Observation) => [
-    10 + (260 * (point.at - first)) / Math.max(86400_000, last - first),
-    76 - (64 * ((point.average as number) - min)) / Math.max(1, max - min),
-  ]
-  let previous: Observation | null = null
-  for (const point of points) {
-    if (point.average === null) {
-      previous = null
-      continue
-    }
-    const [x, y] = position(point)
-    if (
-      previous &&
-      Math.floor(point.at / 86400_000) - Math.floor(previous.at / 86400_000) ===
-        1
-    ) {
-      const [px, py] = position(previous)
-      const line = document.createElementNS(ns, 'line')
-      line.setAttribute('x1', String(px))
-      line.setAttribute('y1', String(py))
-      line.setAttribute('x2', String(x))
-      line.setAttribute('y2', String(y))
-      line.setAttribute('stroke', 'currentColor')
-      svg.append(line)
-    }
-    const circle = document.createElementNS(ns, 'circle')
-    circle.setAttribute('cx', String(x))
-    circle.setAttribute('cy', String(y))
-    circle.setAttribute('r', '3')
-    circle.setAttribute('fill', 'currentColor')
-    const title = document.createElementNS(ns, 'title')
-    title.textContent = `${new Date(point.at).toLocaleString('fr-FR')} · ${point.average} W`
-    circle.append(title)
-    svg.append(circle)
-    previous = point
-  }
-  return svg
-}
 export function renderPriceInspector(): void {
   if (!selected) return
   const root = document.querySelector('[data-wm-price-inspector]')?.shadowRoot
@@ -284,15 +243,32 @@ export function renderPriceInspector(): void {
   const refresh = root.querySelector<HTMLButtonElement>('[data-price-refresh]')
   if (refresh) {
     refresh.disabled = !canRefreshPrice(id)
-    refresh.textContent =
-      context === 'decision' && priceTooOld(quote, context)
-        ? '↻ Actualiser avant de décider'
-        : '↻'
+    setLoadingText(
+      refresh,
+      isPriceLoading(id)
+        ? 'Actualisation en cours'
+        : context === 'decision' && priceTooOld(quote, context)
+          ? '↻ Actualiser avant de décider'
+          : '↻ Actualiser',
+      isPriceLoading(id),
+    )
   }
-  const presentation = presentPrice(quote, context)
+  const presentation = presentPrice(quote, context, shiny)
+  const freshness = root.querySelector<HTMLElement>('[data-price-freshness]')
+  const state = priceFreshness(quote, context)
+  if (freshness) {
+    freshness.textContent = shiny
+      ? 'Variante brillante · moyenne native et graphe indisponibles'
+      : state.text
+    freshness.dataset.warning = String(shiny || state.warning)
+  }
   const value = root.querySelector<HTMLElement>('[data-price-inspector-value]')
   if (value) {
-    value.textContent = `${presentation.value}${presentation.age ? ` · ${presentation.age}` : ''}`
+    setLoadingText(
+      value,
+      `${presentation.value}${presentation.age ? ` · ${presentation.age}` : ''}`,
+      !shiny && (presentation.status === 'loading' || isPriceLoading(id)),
+    )
     value.title = presentation.hint
   }
   for (const button of root.querySelectorAll<HTMLButtonElement>(
@@ -338,22 +314,12 @@ export function renderPriceInspector(): void {
   if (history && history.dataset.points !== fingerprint) {
     history.dataset.points = fingerprint
     history.replaceChildren()
-    const caption = document.createElement('p')
-    caption.className = 'wm-note'
-    const known = points.flatMap(point =>
-      point.average === null ? [] : [point.average],
-    )
-    if (known.length >= 2) history.append(graph(points))
-    const span = points.length
-      ? Math.floor((points.at(-1)?.at ?? 0) / 86400_000) -
-        Math.floor(points[0].at / 86400_000) +
-        1
-      : 0
-    const gaps = span - points.length
-    const unpriced = points.length - known.length
-    caption.textContent = points.length
-      ? `${points.length} observation${points.length === 1 ? '' : 's'} locale${points.length === 1 ? '' : 's'}${gaps ? ` · ${gaps} jours manquants` : ''}${unpriced ? ` · ${unpriced} sans données de vente` : ''} · ${new Date(points[0].at).toLocaleDateString('fr-FR')} – ${new Date(points.at(-1)?.at ?? 0).toLocaleDateString('fr-FR')}${known.length ? ` · ${Math.min(...known)}–${Math.max(...known)} W` : ''}`
-      : 'Aucune observation locale pour le moment'
-    history.append(caption)
+    if (shiny) {
+      const caption = document.createElement('p')
+      caption.className = 'wm-note'
+      caption.textContent =
+        'Aucun historique distinct des brillantes exposé par la moyenne native'
+      history.append(caption)
+    } else history.append(createPriceGraph(points))
   }
 }

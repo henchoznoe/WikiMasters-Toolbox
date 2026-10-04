@@ -22,7 +22,7 @@ function readPanelCollapsed(): boolean {
   } catch {
     /* Storage unavailable. */
   }
-  return window.matchMedia('(max-width: 600px)').matches
+  return false
 }
 
 function writePanelCollapsed(collapsed: boolean): void {
@@ -73,7 +73,7 @@ export function syncToolboxPanel(
   header.className = 'wm-panel-header'
   const title = document.createElement('h2')
   title.className = 'wm-panel-title'
-  title.textContent = 'Toolbox'
+  title.textContent = 'Toolbox · Prix'
   const mark = document.createElement('span')
   mark.className = 'wm-panel-mark'
   mark.textContent = page.label
@@ -85,7 +85,7 @@ export function syncToolboxPanel(
     `${initiallyExpanded ? 'Masquer' : 'Afficher'} les commandes Toolbox`,
   )
   disclosure.setAttribute('aria-expanded', String(initiallyExpanded))
-  disclosure.textContent = initiallyExpanded ? 'Masquer' : 'Afficher'
+  disclosure.textContent = initiallyExpanded ? 'Réduire' : 'Ouvrir'
   disclosure.addEventListener('click', () => {
     const expanded = panel.classList.toggle('wm-panel-open')
     writePanelCollapsed(!expanded)
@@ -95,7 +95,7 @@ export function syncToolboxPanel(
       `${expanded ? 'Masquer' : 'Afficher'} les commandes Toolbox`,
     )
     disclosure.setAttribute('aria-expanded', String(expanded))
-    disclosure.textContent = expanded ? 'Masquer' : 'Afficher'
+    disclosure.textContent = expanded ? 'Réduire' : 'Ouvrir'
   })
   header.append(title, mark, disclosure)
   const body = page.createBody()

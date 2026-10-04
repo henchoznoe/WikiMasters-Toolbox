@@ -98,7 +98,8 @@ test('price controls and accessibility labels are in French', async () => {
   for (const label of [
     'Prix manquants',
     'Alertes de prix',
-    'Périmètre d’actualisation des prix',
+    'Prix des cartes de cette page',
+    'Options d’actualisation',
     'Actualiser les prix en cache',
   ])
     assert.ok(text.includes(label), label)
@@ -106,11 +107,22 @@ test('price controls and accessibility labels are in French', async () => {
     text,
     /\b(Prices|Load|Refresh|Packs|Discard|Unknown|Shiny)\b/,
   )
-  assert.deepEqual(
-    nodes
-      .filter(n => n.dataset.priceScope)
-      .flatMap(n => n.children.map(option => option.value)),
-    ['page'],
+  assert.equal(nodes[0].tag, 'section')
+  const start = nodes.find(node => node.dataset.priceStart)
+  assert.ok(start)
+  assert.ok(
+    !nodes
+      .filter(node => node.tag === 'details')
+      .some(node => flatten(node).includes(start)),
+    'main action must be visible without expanding an accordion',
+  )
+  assert.equal(
+    nodes.filter(
+      node =>
+        node.dataset.priceFilter &&
+        node.className.includes('wm-rarity-surface'),
+    ).length,
+    6,
   )
   const host = new Element('div')
   c.createToolboxRoot(host)

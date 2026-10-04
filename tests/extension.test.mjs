@@ -172,5 +172,5 @@ test('price presentation shows fetch age without implying a sale window', async 
   const failed = context.presentPrice({ status: 'unavailable', fetchedAt })
   assert.equal(failed.value, '!')
   assert.equal(failed.age, '')
-  assert.equal(context.presentPrice({ status: 'loading' }).value, '…')
+  assert.equal(context.presentPrice({ status: 'loading' }).value, 'Chargement')
 })

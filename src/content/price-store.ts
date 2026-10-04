@@ -214,6 +214,9 @@ export { requestLimit as priceRequestLimit } from './requests'
 
 let cacheEpoch = 0
 const pendingPrices = new Map<string, Promise<void>>()
+export function isPriceLoading(id: string): boolean {
+  return pendingPrices.has(id)
+}
 export function requestPriceQuote(id: string, force = false): Promise<void> {
   if (!id || id.length > 200) return Promise.resolve()
   const pending = pendingPrices.get(id)
@@ -257,8 +260,12 @@ export function requestPriceQuote(id: string, force = false): Promise<void> {
     }
   })()
   pendingPrices.set(id, reading)
+  notify()
   void reading.finally(() => {
-    if (pendingPrices.get(id) === reading) pendingPrices.delete(id)
+    if (pendingPrices.get(id) === reading) {
+      pendingPrices.delete(id)
+      notify()
+    }
   })
   return reading
 }

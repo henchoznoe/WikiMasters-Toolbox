@@ -8,7 +8,7 @@ Keep the scope limited to price references, graphs, freshness, refresh, local ob
 
 All user-facing Toolbox text must be in French, including tooltips, confirmations, errors and accessibility labels. Format displayed numbers and dates using French conventions. Keep code identifiers, protocol values, storage keys and technical documentation in English; `ROADMAP.md` is in French. Preserve native card titles and user-provided content.
 
-The interface should remain compact and consistent with the game. Use `…` for loading, concise status messages and existing Toolbox styles. Keep the README as a project overview with installation, contribution and delivery instructions; planned work belongs in `ROADMAP.md`.
+The interface should remain compact and consistent with the game. Use compact spinning loaders with explicit French loading labels, respect reduced motion, and keep status messages concise with shared Toolbox styles. Keep the README as a project overview with installation, contribution and delivery instructions; planned work belongs in `ROADMAP.md`.
 
 `AGENTS.md` is the single source of repository guidance. `CLAUDE.md` must remain a relative symlink to `AGENTS.md`; edit this file when updating instructions.
 
