@@ -17,18 +17,10 @@ export function setCompatibilityIssue(
 }
 export function getCompatibilityIssues(page?: string): string[] {
   const sources: Record<string, string[]> = {
-    collection: ['collection', 'card-ui', 'sale-ui', 'read:collection'],
+    collection: ['collection', 'card-ui', 'read:collection'],
     catalogue: ['catalogue', 'card-ui', 'read:catalogue'],
     trades: ['trades', 'card-ui', 'read:trades'],
-    market: [
-      'market',
-      'market-list',
-      'marketplace',
-      'card-ui',
-      'sale-ui',
-      'read:market',
-    ],
-    packs: ['pack', 'packs', 'card-ui', 'read:packs'],
+    market: ['market', 'market-list', 'marketplace', 'card-ui', 'read:market'],
   }
   return [
     ...new Set(
@@ -38,11 +30,9 @@ export function getCompatibilityIssues(page?: string): string[] {
     ),
   ]
 }
-export function collectionCompatible(): boolean {
-  return !issues.has('collection')
-}
 export function resetCompatibility(): void {
   issues.clear()
   for (const listener of listeners) listener()
 }
+
 onAccountChange(resetCompatibility)

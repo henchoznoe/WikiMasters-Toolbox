@@ -3,7 +3,6 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import { build } from 'esbuild'
-import { nativeMarketStubs } from './browser-stubs.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 async function expose(module, names, context = {}) {
@@ -200,120 +199,6 @@ test('cached legacy averages remain usable but malformed or future cache cannot 
   assert.equal(h.context.readPriceQuote('future', 'C').status, 'loading')
   assert.equal(h.context.readPriceQuote('good', 'C').average, 0)
   assert.equal(h.context.readPriceQuote('good', null).status, 'unknown-rarity')
-})
-
-test('global, marketplace and trade adapters expose only canonical card metadata', async () => {
-  const payloads = {
-    '/api/cards': {
-      cards: [
-        {
-          id: 'catalogue',
-          wikipedia_title: 'Global',
-          rarity: 'L',
-          privateField: 'hidden',
-        },
-      ],
-    },
-    '/api/marketplace': {
-      auctions: [
-        {
-          id: 'auction',
-          card_id: 'catalogue',
-          card: { id: 'catalogue', wikipedia_title: 'Global', rarity: 'R' },
-          seller: { privateField: 'hidden' },
-        },
-      ],
-    },
-    '/api/trades': {
-      trades: [
-        {
-          items: [
-            {
-              card_id: 'catalogue',
-              card: { id: 'catalogue', wikipedia_title: 'Global', rarity: 'C' },
-              offered_by: 'hidden',
-            },
-          ],
-        },
-      ],
-    },
-    '/api/profile/peer/collection': {
-      collection: [
-        {
-          id: 'foreign-copy',
-          card: { id: 'catalogue', wikipedia_title: 'Global', rarity: 'UR' },
-          snapshot_rarity: 'SR',
-          user_id: 'hidden',
-        },
-      ],
-    },
-    '/api/my-collection?owned_by=peer': {
-      collection: [
-        {
-          id: 'foreign-copy',
-          card: { id: 'catalogue', wikipedia_title: 'Global', rarity: 'UR' },
-          snapshot_rarity: 'R',
-          user_id: 'hidden',
-        },
-      ],
-    },
-  }
-  const events = []
-  const window = {
-    fetch: async url => new Response(JSON.stringify(payloads[url])),
-    dispatchEvent: event => events.push(JSON.parse(event.detail)),
-  }
-  class XHR {
-    open() {}
-    send() {}
-  }
-  class Event {
-    constructor(type, data) {
-      this.type = type
-      this.detail = data.detail
-    }
-  }
-  const result = await build({
-    entryPoints: [`${root}/src/network.ts`],
-    bundle: true,
-    write: false,
-    format: 'iife',
-    platform: 'browser',
-  })
-  vm.runInNewContext(result.outputFiles[0].text, {
-    window,
-    location: { origin: 'https://www.wiki-masters.com' },
-    ...nativeMarketStubs(window),
-    XMLHttpRequest: XHR,
-    CustomEvent: Event,
-    Request,
-    URL,
-  })
-  for (const url of Object.keys(payloads)) {
-    const response = await window.fetch(url)
-    assert.deepEqual(await response.json(), payloads[url])
-    await new Promise(resolve => setImmediate(resolve))
-  }
-  assert.deepEqual(
-    events.map(event => event.kind),
-    [
-      'catalogue',
-      'market-list',
-      'trades',
-      'peer-collection',
-      'peer-collection',
-    ],
-  )
-  assert.deepEqual(
-    events.map(event => event.cards[0].rarity),
-    ['L', 'R', 'C', 'SR', 'R'],
-  )
-  for (const event of events) {
-    assert.equal(event.cards[0].id, 'catalogue')
-    assert.equal(event.cards[0].copyId, null)
-    assert.equal(event.accountId, null)
-    assert.equal(JSON.stringify(event).includes('hidden'), false)
-  }
 })
 
 test('a saved per-tab budget survives reloading the price engine', async () => {

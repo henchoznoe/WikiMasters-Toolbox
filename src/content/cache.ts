@@ -2,16 +2,6 @@ import { getAccountId } from './account'
 
 const DAY = 86400_000
 export const cachePolicies = {
-  collection: {
-    prefix: 'wm_toolbox_collection_v1:',
-    label: 'Collection',
-    freshness: 5 * 60_000,
-    retention: 7 * DAY,
-    maxEntries: 10,
-    maxBytes: 16 * 1024 * 1024,
-    account: true,
-    time: 'updatedAt',
-  },
   prices: {
     prefix: 'wm_toolbox_price_v1_',
     label: 'Prix · partagés',

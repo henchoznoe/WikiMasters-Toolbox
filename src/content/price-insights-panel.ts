@@ -1,4 +1,3 @@
-import { getCollectionState } from './collection'
 import {
   clearPriceAlertEvents,
   readPriceAlerts,
@@ -73,10 +72,7 @@ export function createPriceInsights(): HTMLElement {
   const scope = document.createElement('select')
   scope.dataset.priceDiagnosticScope = '1'
   scope.setAttribute('aria-label', 'Périmètre des prix manquants')
-  for (const [value, label] of [
-    ['page', 'Cartes de cette page'],
-    ['collection', 'Collection chargée'],
-  ]) {
+  for (const [value, label] of [['page', 'Cartes de cette page']]) {
     const option = document.createElement('option')
     option.value = value
     option.textContent = label
@@ -99,10 +95,7 @@ export function createPriceInsights(): HTMLElement {
   const list = document.createElement('div')
   list.dataset.priceDiagnosticsBody = '1'
   const retry = button('Relancer les prix filtrés · max 10', () => {
-    const cards =
-      scope.value === 'collection'
-        ? getCollectionState().cards
-        : getVisiblePriceCards()
+    const cards = getVisiblePriceCards()
     const ids = diagnosePrices(cards, readPriceQuote)
       .filter(row => filter.value === 'all' || row.reason === filter.value)
       .map(row => row.card.id)
@@ -247,10 +240,7 @@ export function renderPriceInsights(): void {
     const filter = root.querySelector<HTMLSelectElement>(
       '[data-price-diagnostic-filter]',
     )?.value
-    const cards =
-      scope === 'collection'
-        ? getCollectionState().cards
-        : getVisiblePriceCards()
+    const cards = getVisiblePriceCards()
     const rows = diagnosePrices(cards, readPriceQuote).filter(
       row => filter === 'all' || row.reason === filter,
     )
@@ -265,17 +255,11 @@ export function renderPriceInsights(): void {
         !rows.some(row => canRefreshPrice(row.card.id))
     replace(
       list,
-      JSON.stringify([
-        rows,
-        page,
-        scope,
-        getCollectionState().status,
-        Math.floor(Date.now() / 60_000),
-      ]),
+      JSON.stringify([rows, page, scope, Math.floor(Date.now() / 60_000)]),
       () => {
         const nodes: Node[] = [
           note(
-            `${rows.length} variantes${scope === 'collection' && getCollectionState().status !== 'complete' ? ' · index partiel' : ''} · les prix non chargés ne sont pas des échecs`,
+            `${rows.length} variantes · les prix non chargés ne sont pas des échecs`,
           ),
         ]
         for (const row of rows.slice(page * 10, page * 10 + 10)) {
@@ -303,7 +287,7 @@ export function renderPriceInsights(): void {
           nodes.push(node)
         }
         const navigation = document.createElement('div')
-        navigation.className = 'wm-selection-pagination'
+        navigation.className = 'wm-price-pagination'
         const previous = button('←', () => {
           list.dataset.page = String(page - 1)
           renderPriceInsights()

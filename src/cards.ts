@@ -7,19 +7,6 @@ export type Card = {
   shiny: boolean
 }
 
-export type OwnedCard = Card & {
-  copyId: string
-  ownerId: string
-  starred: boolean
-  tagIds: string[]
-  obtainedAt: string | null
-  category?: string | null
-  atk?: number | null
-  def?: number | null
-  hasImage?: boolean | null
-  tagNames?: Record<string, string>
-}
-
 export function nonemptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
@@ -42,62 +29,6 @@ export function mapCard(raw: unknown, possession = false): Card | null {
       nonemptyString(entry.user_card_id) ??
       (possession && nested ? nonemptyString(entry.id) : null),
     shiny: entry.is_shiny === true || source.is_shiny === true,
-  }
-}
-
-export function mapOwnedCard(raw: unknown): OwnedCard | null {
-  const card = mapCard(raw, true)
-  if (!card?.copyId || !raw || typeof raw !== 'object') return null
-  const entry = raw as Record<string, unknown>
-  const ownerId = nonemptyString(entry.user_id)
-  // A grouped catalogue row is not a list of identified copies.
-  if (!ownerId || (entry.count !== undefined && entry.count !== 1)) return null
-  // Actions must not interpret missing protection metadata as an unprotected copy.
-  if (
-    typeof entry.starred !== 'boolean' ||
-    typeof entry.is_shiny !== 'boolean' ||
-    !Array.isArray(entry.tags) ||
-    entry.tags.some(
-      tag => !tag || typeof tag !== 'object' || !nonemptyString(tag.id),
-    )
-  )
-    return null
-  const source = (
-    entry.card && typeof entry.card === 'object' ? entry.card : entry
-  ) as Record<string, unknown>
-  const stat = (value: unknown): number | null =>
-    typeof value === 'number' && Number.isFinite(value) && value >= 0
-      ? value
-      : null
-  return {
-    ...card,
-    copyId: card.copyId,
-    ownerId: ownerId.toLowerCase(),
-    starred: entry.starred === true,
-    tagIds: Array.isArray(entry.tags)
-      ? entry.tags.flatMap(tag => {
-          const id =
-            tag && typeof tag === 'object' ? nonemptyString(tag.id) : null
-          return id ? [id] : []
-        })
-      : [],
-    obtainedAt: nonemptyString(entry.obtained_at),
-    category: nonemptyString(source.category),
-    atk: stat(source.atk),
-    def: stat(source.def),
-    hasImage:
-      source.hide_image === true
-        ? false
-        : source.image_url === null || typeof source.image_url === 'string'
-          ? !!nonemptyString(source.image_url)
-          : null,
-    tagNames: Object.fromEntries(
-      (entry.tags as Record<string, unknown>[]).flatMap(tag => {
-        const id = nonemptyString(tag.id),
-          name = nonemptyString(tag.name)
-        return id && name ? [[id, name]] : []
-      }),
-    ),
   }
 }
 

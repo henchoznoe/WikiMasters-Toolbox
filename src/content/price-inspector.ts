@@ -80,7 +80,7 @@ export function openPriceInspector(
   const sample = document.createElement('div')
   sample.dataset.priceSalesSample = '1'
   const actions = document.createElement('div')
-  actions.className = 'wm-collection-actions'
+  actions.className = 'wm-price-actions'
   actions.append(
     button('↻', 'Actualiser cette carte · une tentative par minute', () => {
       void requestPriceQuote(id, true)

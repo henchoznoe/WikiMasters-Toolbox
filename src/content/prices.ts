@@ -112,6 +112,7 @@ export function resolveVisibleCard(
   if (new Set(candidates.map(card => card.id)).size !== 1) return null
   if (!rarity && new Set(candidates.map(card => card.rarity)).size > 1)
     return null
+  if (new Set(candidates.map(card => card.shiny)).size > 1) return null
   return candidates[0] ?? null
 }
 
@@ -220,7 +221,7 @@ const visiblePriceObserver = new IntersectionObserver(
 
 export function renderCards(): void {
   if (
-    !/^\/(collection|global-collection|pulls|marketplace|trades)(\/|$)/.test(
+    !/^\/(collection|global-collection|marketplace|trades)(\/|$)/.test(
       location.pathname,
     )
   )

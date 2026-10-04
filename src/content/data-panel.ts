@@ -11,12 +11,12 @@ import { requestLimit } from './requests'
 
 export function createDataControls(): HTMLElement {
   const details = document.createElement('details')
-  details.className = 'wm-run-summary wm-data-controls'
+  details.className = 'wm-data-controls'
   details.dataset.wmToolboxData = '1'
   const summary = document.createElement('summary')
   summary.textContent = 'Données et caches'
   const body = document.createElement('div')
-  body.className = 'wm-run-body'
+  body.className = 'wm-data-body'
   const status = document.createElement('p')
   status.dataset.wmDataStatus = '1'
   status.className = 'wm-note'
@@ -41,9 +41,7 @@ export function renderDataControls(): void {
   )
   const text =
     [...issues, requestLimit()].filter(Boolean).join(' · ') ||
-    (getAccountId()
-      ? 'Compte détecté · données personnelles isolées'
-      : 'En attente de votre compte WikiMasters…')
+    'Prix publics · cartes visibles chargées automatiquement'
   if (status.textContent !== text) status.textContent = text
   const summary = root.querySelector<HTMLElement>(
     '[data-wm-toolbox-data] > summary',
