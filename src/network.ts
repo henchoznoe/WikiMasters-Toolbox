@@ -1,8 +1,6 @@
 import { type Card, mapCard } from './cards'
-import { mapAuction } from './content/market-model'
 import { mapPriceListing } from './content/price-comparison'
 import { saleSample } from './content/sales-model'
-import { installNativeMarket } from './native-market'
 
 const networkWindow = window as Window & {
   __wmToolboxNetworkInstalled?: boolean
@@ -26,20 +24,6 @@ function emit(data: Record<string, unknown>): void {
     }),
   )
 }
-function failedSale(url: URL, method: string, epoch: number, status = 0): void {
-  if (
-    url.origin === location.origin &&
-    url.pathname === '/api/marketplace' &&
-    method.toUpperCase() === 'POST' &&
-    epoch === accountEpoch
-  )
-    emit({
-      kind: 'sale-result',
-      accountId,
-      status: status >= 400 && status < 500 ? 'rejected' : 'unknown',
-    })
-}
-
 function accountIdFromProfileUrl(url: URL): string | null {
   // Only the ID is used; ignore the other columns in the native profile lookup.
   if (
@@ -64,21 +48,7 @@ function setAccount(id: string | null): void {
   emit({ kind: 'account', accountId })
 }
 
-function isMutation(url: URL, method: string): boolean {
-  if (['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) return false
-  if (url.origin === location.origin)
-    return (
-      url.pathname === '/api/packs/open' ||
-      /^\/api\/user-cards\//.test(url.pathname) ||
-      /^\/api\/(trades|marketplace)(\/|$)/.test(url.pathname)
-    )
-  return (
-    url.hostname.endsWith('.supabase.co') &&
-    /^\/rest\/v1\/(user_cards|user_card_tags|trades)(\/|$)/.test(url.pathname)
-  )
-}
-
-function inspect(url: URL, method: string, json: unknown, epoch: number): void {
+function inspect(url: URL, json: unknown, epoch: number): void {
   // Discard a response that started under a previous login.
   if (epoch !== accountEpoch) return
   if (
@@ -109,21 +79,6 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
       setAccount(id.toLowerCase())
     return
   }
-  if (isMutation(url, method)) {
-    if (
-      url.pathname === '/api/marketplace' &&
-      method.toUpperCase() === 'POST'
-    ) {
-      const result = json as Record<string, unknown> | null
-      emit({
-        kind: 'sale-result',
-        accountId,
-        status: typeof result?.auction_id === 'string' ? 'listed' : 'unknown',
-        auctionId: result?.auction_id,
-      })
-    }
-    emit({ kind: 'collection-changed', accountId })
-  }
   if (url.origin !== location.origin) return
   if (!json || typeof json !== 'object' || Array.isArray(json)) {
     if (url.pathname === '/api/my-collection')
@@ -149,28 +104,6 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
     if (samples.length) emit({ kind: 'sale-samples', accountId, samples })
     const listings = rows.slice(0, 500).map(mapPriceListing).filter(Boolean)
     if (listings.length) emit({ kind: 'price-listings', accountId, listings })
-  }
-  if (
-    url.pathname === '/api/marketplace' &&
-    data.mine === true &&
-    Array.isArray(data.selling) &&
-    Array.isArray(data.history)
-  ) {
-    emit({
-      kind: 'market-sales',
-      accountId,
-      selling: data.selling.map(mapAuction).filter(Boolean),
-      history: data.history.map(mapAuction).filter(Boolean),
-    })
-  }
-  if (
-    url.pathname === '/api/my-collection/stats' &&
-    !['q', 'rarity', 'tag_id', 'untagged', 'wishlisted_by'].some(key =>
-      url.searchParams.has(key),
-    )
-  ) {
-    emit({ kind: 'collection-total', accountId, total: data.total })
-    return
   }
   let kind: string | null = null
   let raw: unknown[] = []
@@ -229,19 +162,11 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
   } else if (/^\/api\/marketplace\/[0-9a-f-]{36}$/i.test(url.pathname)) {
     kind = 'marketplace'
     raw = [data.auction]
-  } else if (url.pathname === '/api/packs/open' && Array.isArray(data.cards)) {
-    kind = 'pack'
-    raw = data.cards
   }
   if (
     !kind &&
     !url.search &&
-    [
-      '/api/my-collection',
-      '/api/cards',
-      '/api/trades',
-      '/api/packs/open',
-    ].includes(url.pathname)
+    ['/api/my-collection', '/api/cards', '/api/trades'].includes(url.pathname)
   ) {
     compatibility(
       url.pathname === '/api/my-collection'
@@ -250,15 +175,13 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
           ? 'catalogue'
           : url.pathname === '/api/trades'
             ? 'trades'
-            : 'pack',
+            : 'catalogue',
       false,
     )
     return
   }
   if (kind) {
-    const mapped = raw.map(row =>
-      mapCard(row, kind === 'collection' || kind === 'pack'),
-    )
+    const mapped = raw.map(row => mapCard(row, kind === 'collection'))
     if (mapped.some(card => !card)) {
       compatibility(kind, false)
       return
@@ -269,38 +192,29 @@ function inspect(url: URL, method: string, json: unknown, epoch: number): void {
 }
 
 function isRelevant(url: URL, method: string): boolean {
+  // Native authentication responses establish scope; no credentials are read.
+  if (url.hostname.endsWith('.supabase.co'))
+    return (
+      Boolean(accountIdFromProfileUrl(url)) ||
+      url.pathname === '/auth/v1/logout' ||
+      url.pathname === '/rest/v1/rpc/get_my_profile'
+    )
+  if (method.toUpperCase() !== 'GET' || url.origin !== location.origin)
+    return false
   return (
-    Boolean(accountIdFromProfileUrl(url)) ||
-    (url.hostname.endsWith('.supabase.co') &&
-      (url.pathname === '/auth/v1/logout' ||
-        url.pathname === '/rest/v1/rpc/get_my_profile')) ||
-    isMutation(url, method) ||
-    (url.origin === location.origin &&
-      (url.pathname === '/api/trades' ||
-        /^\/api\/profile\/[^/]+\/collection$/.test(url.pathname) ||
-        url.pathname === '/api/cards' ||
-        url.pathname === '/api/marketplace' ||
-        url.pathname === '/api/my-collection' ||
-        url.pathname === '/api/my-collection/stats' ||
-        /^\/api\/marketplace\/[0-9a-f-]{36}$/i.test(url.pathname)))
+    [
+      '/api/trades',
+      '/api/cards',
+      '/api/marketplace',
+      '/api/my-collection',
+    ].includes(url.pathname) ||
+    /^\/api\/profile\/[^/]+\/collection$/.test(url.pathname) ||
+    /^\/api\/marketplace\/[0-9a-f-]{36}$/i.test(url.pathname)
   )
-}
-
-function inspectPackVerification(url: URL, json: unknown, epoch: number): void {
-  if (
-    epoch === accountEpoch &&
-    url.origin === location.origin &&
-    url.pathname === '/api/packs/open' &&
-    json &&
-    typeof json === 'object' &&
-    (json as Record<string, unknown>).human_verification_required === true
-  )
-    emit({ kind: 'pack-verification-required', accountId })
 }
 
 if (!networkWindow.__wmToolboxNetworkInstalled) {
   networkWindow.__wmToolboxNetworkInstalled = true
-  installNativeMarket(() => accountId, emit)
   function inspectAccountRequest(url: URL): void {
     if (
       url.hostname.endsWith('.supabase.co') &&
@@ -338,22 +252,15 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
     if (isRelevant(url, method)) {
       void promise
         .then(async response => {
-          if (response.status === 401 && url.origin === location.origin) {
-            failedSale(url, method, epoch, response.status)
+          if (
+            (response.status === 401 || response.status === 403) &&
+            url.origin === location.origin
+          ) {
             if (epoch === accountEpoch) setAccount(null)
             return
           }
-          if (response.ok) {
-            const json = await response
-              .clone()
-              .json()
-              .catch(() => null)
-            inspect(url, method, json, epoch)
-          } else if (
-            url.origin === location.origin &&
-            url.pathname === '/api/packs/open'
-          ) {
-            inspectPackVerification(
+          if (response.ok)
+            inspect(
               url,
               await response
                 .clone()
@@ -361,22 +268,9 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
                 .catch(() => null),
               epoch,
             )
-            if (response.status >= 500 && epoch === accountEpoch)
-              emit({ kind: 'collection-changed', accountId })
-          } else if (
-            response.status >= 500 &&
-            isMutation(url, method) &&
-            epoch === accountEpoch
-          ) {
-            emit({ kind: 'collection-changed', accountId })
-          }
-          if (!response.ok) failedSale(url, method, epoch, response.status)
         })
         .catch(() => {
-          failedSale(url, method, epoch)
-          /* Leave the game's response untouched. */
-          if (isMutation(url, method) && epoch === accountEpoch)
-            emit({ kind: 'collection-changed', accountId })
+          /* Leave the game's request and response intact. */
         })
     }
     return promise
@@ -416,37 +310,17 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
       this.addEventListener(
         'load',
         () => {
-          if (this.status === 401 && request.url.origin === location.origin) {
-            failedSale(request.url, request.method, request.epoch, this.status)
+          if (
+            (this.status === 401 || this.status === 403) &&
+            request.url.origin === location.origin
+          ) {
             if (request.epoch === accountEpoch) setAccount(null)
             return
           }
-          if (
-            this.status >= 500 &&
-            isMutation(request.url, request.method) &&
-            request.epoch === accountEpoch
-          ) {
-            emit({ kind: 'collection-changed', accountId })
-          }
-          if (this.status < 200 || this.status >= 300) {
-            failedSale(request.url, request.method, request.epoch, this.status)
-            try {
-              inspectPackVerification(
-                request.url,
-                this.responseType === 'json'
-                  ? this.response
-                  : JSON.parse(this.responseText || 'null'),
-                request.epoch,
-              )
-            } catch {
-              /* Non-JSON response. */
-            }
-            return
-          }
+          if (this.status < 200 || this.status >= 300) return
           try {
             inspect(
               request.url,
-              request.method,
               this.responseType === 'json'
                 ? this.response
                 : JSON.parse(this.responseText || 'null'),
@@ -454,11 +328,6 @@ if (!networkWindow.__wmToolboxNetworkInstalled) {
             )
           } catch {
             /* Non-JSON response. */
-            if (
-              isMutation(request.url, request.method) &&
-              request.epoch === accountEpoch
-            )
-              emit({ kind: 'collection-changed', accountId })
           }
         },
         { once: true },

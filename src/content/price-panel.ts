@@ -1,6 +1,3 @@
-import { getCollectionState } from './collection'
-import { getSelectionState } from './collection-actions'
-import { statusLabel } from './presentation'
 import { currentPriceContext } from './price-context'
 import {
   createPriceInsights,
@@ -29,11 +26,7 @@ export function createPriceControls(): HTMLElement {
   const scope = document.createElement('select')
   scope.setAttribute('aria-label', 'Périmètre d’actualisation des prix')
   scope.dataset.priceScope = '1'
-  for (const [value, label] of [
-    ['page', 'Cartes de cette page'],
-    ['collection', 'Collection chargée'],
-    ['selection', 'Sélection'],
-  ]) {
+  for (const [value, label] of [['page', 'Cartes de cette page']]) {
     const option = document.createElement('option')
     option.value = value
     option.textContent = label
@@ -76,7 +69,7 @@ export function createPriceControls(): HTMLElement {
   cap.setAttribute('aria-label', 'Nombre maximal de requêtes de prix')
   capLabel.append(cap)
   const actions = document.createElement('div')
-  actions.className = 'wm-collection-actions'
+  actions.className = 'wm-price-actions'
   const start = document.createElement('button')
   start.type = 'button'
   start.className = 'wm-primary-button'
@@ -88,12 +81,7 @@ export function createPriceControls(): HTMLElement {
         .filter(button => button.getAttribute('aria-pressed') === 'true')
         .map(button => button.dataset.priceFilter),
     )
-    const cards =
-      scope.value === 'collection'
-        ? getCollectionState().cards
-        : scope.value === 'selection'
-          ? getSelectionState().plan.cards
-          : getVisiblePriceCards()
+    const cards = getVisiblePriceCards()
     void startPriceBatch(
       cards.filter(card => active.has(card.rarity ?? '')).map(card => card.id),
       force.checked,
@@ -155,12 +143,7 @@ export function renderPricePanel(): void {
       .filter(button => button.getAttribute('aria-pressed') === 'true')
       .map(button => button.dataset.priceFilter),
   )
-  const cards =
-    scope.value === 'collection'
-      ? getCollectionState().cards
-      : scope.value === 'selection'
-        ? getSelectionState().plan.cards
-        : getVisiblePriceCards()
+  const cards = getVisiblePriceCards()
   const ids = [
     ...new Set(
       cards.filter(card => active.has(card.rarity ?? '')).map(card => card.id),
@@ -176,7 +159,7 @@ export function renderPricePanel(): void {
     state.total || state.cancelled
       ? `${state.done} / ${state.total} · ${state.running ? '…' : state.cancelled ? 'arrêté' : state.done < state.total ? 'en pause' : '✓'}${state.failed ? ` · ${state.failed} !` : ''}${state.skipped ? ` · ${state.skipped} ignorées` : ''}${limit ? ` · ${limit}` : ''}`
       : `${pending} / ${ids.length} cartes${limit ? ` · ${limit}` : ''}`
-  text.title = `Récapitulatif uniquement · 1 requête / 650 ms · 200 / heure par onglet · actualisation ≥1 min · le périmètre collection utilise l’index chargé (${statusLabel(getCollectionState().status)}) · « Arrêter » termine la lecture actuelle ; les lectures automatiques en file pour les cartes visibles sont indépendantes.`
+  text.title = `Récapitulatif uniquement · 1 requête / 650 ms · 200 / heure par onglet · actualisation ≥1 min · « Arrêter » termine la lecture actuelle ; les lectures automatiques en file pour les cartes visibles sont indépendantes.`
   start.textContent =
     currentPriceContext() === 'decision'
       ? 'Actualiser avant de décider'

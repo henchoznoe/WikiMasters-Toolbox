@@ -51,13 +51,6 @@ export const pageAdapters: readonly PageAdapter[] = [
     kind: 'market-list',
     cards: data => (data.auction ? [data.auction] : array(data.auctions)),
   },
-  {
-    id: 'packs',
-    matches: path => /^\/pulls(\/|$)/.test(path),
-    url: () => null,
-    kind: 'pack',
-    cards: data => array(data.cards),
-  },
 ]
 export function resolvePageAdapter(path: string): PageAdapter | null {
   return pageAdapters.find(adapter => adapter.matches(path)) ?? null
@@ -68,9 +61,7 @@ export function parsePageCards(
 ): Card[] | null {
   const raw = adapter.cards(data)
   if (!raw) return null
-  const mapped = raw.map(row =>
-    mapCard(row, adapter.kind === 'collection' || adapter.kind === 'pack'),
-  )
+  const mapped = raw.map(row => mapCard(row))
   return mapped.some(card => !card) ? null : (mapped as Card[])
 }
 export const cardSelectors = {

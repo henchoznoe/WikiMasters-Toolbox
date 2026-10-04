@@ -15,7 +15,6 @@ import {
   getRequestEpoch,
   requestLimit as priceRequestLimit,
   RequestAdmissionError,
-  requestJson,
 } from './requests'
 
 const PREFIX = 'wm_toolbox_price_v1_'
@@ -212,12 +211,7 @@ function save(id: string, row: PriceEntry): void {
 }
 
 export { requestLimit as priceRequestLimit } from './requests'
-export function requestMarketJson(
-  url: string,
-  signal: AbortSignal,
-): Promise<Record<string, unknown>> {
-  return requestJson(url, signal)
-}
+
 let cacheEpoch = 0
 const pendingPrices = new Map<string, Promise<void>>()
 export function requestPriceQuote(id: string, force = false): Promise<void> {

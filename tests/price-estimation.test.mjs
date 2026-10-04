@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import vm from 'node:vm'
 import { build } from 'esbuild'
-import { nativeMarketStubs } from './browser-stubs.mjs'
 
 const DAY = 86400_000
 const NOW = Date.UTC(2026, 9, 2, 12)
@@ -178,73 +177,23 @@ test('sales persistence is isolated per account and can be cleared without affec
 
 test('free native market history contributes concluded observations without mixing active or unsold listings', async () => {
   const c = await expose(
-    'market-store',
-    'observeMarket',
+    'sales-model',
+    'saleSample',
     { localStorage: memory(), Date: Clock },
-    "import {setAccountId} from './src/content/account.ts'; import {readSaleSamples} from './src/content/sales-store.ts'; Object.assign(globalThis,{setAccountId,readSaleSamples})",
+    "import {setAccountId} from './src/content/account.ts'; import {readSaleSamples} from './src/content/sales-store.ts'; import {observeSaleSamples} from './src/content/sales-store.ts'; Object.assign(globalThis,{setAccountId,readSaleSamples,observeSaleSamples})",
   )
   c.setAccountId(A)
-  c.observeMarket({
-    mine: true,
-    selling: [raw({ status: 'active' })],
-    history: [raw(), raw({ id: auction(2), status: 'settled_unsold' })],
-  })
+  c.observeSaleSamples(
+    [
+      raw({ status: 'active' }),
+      raw(),
+      raw({ id: auction(2), status: 'settled_unsold' }),
+    ]
+      .map(row => c.saleSample(row))
+      .filter(Boolean),
+  )
   assert.equal(c.readSaleSamples().length, 1)
   assert.equal(c.readSaleSamples()[0].amount, 12)
-})
-
-test('collection value excludes unknown and shiny prices, retains one variant copy and preserves zero', async () => {
-  const c = await expose('collection-value', 'collectionValue')
-  const copy = (n, extra = {}) => ({
-    ...card,
-    copyId: `copy-${n}`,
-    ownerId: A,
-    title: 'Synthetic',
-    starred: false,
-    tagIds: [],
-    obtainedAt: null,
-    ...extra,
-  })
-  const cards = [
-    copy(1),
-    copy(2),
-    copy(3, { rarity: 'C' }),
-    copy(4, { shiny: true }),
-    copy(5, { shiny: true }),
-    copy(6, { id: 'unknown' }),
-    copy(7, { id: 'zero' }),
-    copy(8, { id: 'zero' }),
-    copy(1),
-  ]
-  const result = c.collectionValue(cards, (id, rarity) =>
-    id === 'unknown'
-      ? { status: 'no-sales', fetchedAt: NOW }
-      : {
-          status: 'available',
-          average: id === 'zero' ? 0 : rarity === 'R' ? 10 : 2,
-          fetchedAt: NOW - DAY,
-          stale: true,
-        },
-  )
-  assert.deepEqual(plain(result.all), {
-    total: 22,
-    copies: 8,
-    unknown: 3,
-    stale: 5,
-  })
-  assert.deepEqual(plain(result.duplicates), {
-    total: 10,
-    copies: 3,
-    unknown: 1,
-    stale: 2,
-  })
-  assert.equal(result.oldest, NOW - DAY)
-  const overflow = c.collectionValue([copy(1), copy(2)], () => ({
-    status: 'available',
-    average: Number.MAX_VALUE,
-    fetchedAt: NOW,
-  }))
-  assert.equal(overflow.all.total, null)
 })
 
 test('decision freshness is 15 minutes while album reuse remains 24 hours and original failure age is visible', async () => {
@@ -327,77 +276,14 @@ test('targeted decision batches bypass album TTL, deduplicate and preserve times
 
 test('mapped market metadata cannot manufacture an explicit shiny flag for samples', async () => {
   const c = await expose(
-    'market-store',
-    'observeMarketSales',
+    'sales-model',
+    'saleSample',
     { localStorage: memory(), Date: Clock },
-    "import {setAccountId} from './src/content/account.ts'; import {mapAuction} from './src/content/market-model.ts'; import {readSaleSamples} from './src/content/sales-store.ts'; Object.assign(globalThis,{setAccountId,mapAuction,readSaleSamples})",
+    "import {setAccountId} from './src/content/account.ts'; import {readSaleSamples} from './src/content/sales-store.ts'; import {mapAuction} from './src/content/market-model.ts'; import {observeSaleSamples} from './src/content/sales-store.ts'; Object.assign(globalThis,{setAccountId,mapAuction,readSaleSamples,observeSaleSamples})",
   )
   c.setAccountId(A)
-  c.observeMarketSales([], [c.mapAuction(raw({ is_shiny: undefined }))])
+  assert.equal(c.saleSample(c.mapAuction(raw({ is_shiny: undefined }))), null)
   assert.equal(c.readSaleSamples().length, 0)
-})
-
-test('native sale observation forwards only validated fields and leaves the response intact', async () => {
-  const events = []
-  const payload = {
-    mine: true,
-    selling: [],
-    history: [raw(), raw({ id: auction(2), is_shiny: undefined })],
-  }
-  const window = {
-    fetch: async url =>
-      new Response(
-        JSON.stringify(
-          String(url).includes('profiles') ? [{ id: A }] : payload,
-        ),
-      ),
-    dispatchEvent: event => events.push(JSON.parse(event.detail)),
-  }
-  const result = await build({
-    entryPoints: ['src/network.ts'],
-    bundle: true,
-    write: false,
-    format: 'iife',
-  })
-  class XHR {
-    open() {}
-    send() {}
-  }
-  class Event {
-    constructor(type, data) {
-      this.type = type
-      this.detail = data.detail
-    }
-  }
-  vm.runInNewContext(result.outputFiles[0].text, {
-    window,
-    Date: Clock,
-    location: { origin: 'https://www.wiki-masters.com' },
-    ...nativeMarketStubs(window),
-    XMLHttpRequest: XHR,
-    CustomEvent: Event,
-    Request,
-    URL,
-  })
-  await window.fetch(
-    `https://game.supabase.co/rest/v1/profiles?select=id&id=eq.${A}`,
-  )
-  await new Promise(resolve => setImmediate(resolve))
-  const response = await window.fetch('/api/marketplace?mine=1')
-  assert.deepEqual(await response.json(), plain(payload))
-  await new Promise(resolve => setImmediate(resolve))
-  const observation = events.find(event => event.kind === 'sale-samples')
-  assert.equal(observation.accountId, A)
-  assert.deepEqual(observation.samples, [
-    sample(1, { amount: 12, endedAt: NOW - DAY }),
-  ])
-  for (const privateField of [
-    'buyer',
-    'seller',
-    'private-copy',
-    'Synthetic card',
-  ])
-    assert.equal(JSON.stringify(observation).includes(privateField), false)
 })
 
 test('a native sale form uses decision freshness even on the collection route', async () => {

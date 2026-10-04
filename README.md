@@ -4,7 +4,7 @@
 
 # WikiMasters Toolbox
 
-A companion extension for everyday play on WikiMasters.
+Card price references, freshness and local price charts for WikiMasters.
 
 [![CI](https://github.com/henchoznoe/WikiMasters-Toolbox/actions/workflows/ci.yml/badge.svg)](https://github.com/henchoznoe/WikiMasters-Toolbox/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/henchoznoe/WikiMasters-Toolbox)](https://github.com/henchoznoe/WikiMasters-Toolbox/releases/latest)
@@ -20,17 +20,17 @@ A companion extension for everyday play on WikiMasters.
 
 ## Overview
 
-WikiMasters Toolbox brings useful context and controls directly into [WikiMasters](https://www.wiki-masters.com/), making it easier to manage a growing collection and understand card values while playing. Its user interface is in French, including status messages, tooltips and accessibility labels; code and technical documentation remain in English, and the roadmap is in French. Its compact interface follows the game's visual style and keeps the information close to the cards.
+WikiMasters Toolbox displays card price references directly in [WikiMasters](https://www.wiki-masters.com/). Its compact interface is in French; code and technical documentation are in English, and the [roadmap](ROADMAP.md) is in French. Every price tool uses data available to a free game account.
 
-Every option is designed for a **free WikiMasters account**. Toolbox uses the game's available data and keeps its settings, caches and statistics in your browser. It is an independent community project, with no developer-operated backend, analytics or advertising. See the [privacy policy](PRIVACY.md) for the stored data and the [roadmap](ROADMAP.md) for planned work.
+Prices stay tied to the **catalogue ID and exact rarity**. Visible cards load through a shared request queue. The **Prix** panel can refresh the current page, filter rarities, cap requests and stop a batch. Native requests remain unchanged. There are no Toolbox requests that change game state.
 
-On the collection page, **Filtres / vues / doublons** combines rarity, tag, favorite, duplicate status, known price/range, category, ATK/DEF and image availability over every loaded copy. Save named queries per account, sort the results without losing the selection, or group exact catalogue/rarity/shiny variants and inspect their copies. **Sélectionner les résultats** uses the existing keep/protect rules after a protection check. Partial indexes and unknown values stay explicit. **Cartes compactes** fits more cards per line in the collection and global catalogue.
+Click a price to inspect its native average, check time and **local graph**. Successful reads record one observation per rarity per UTC day for up to 90 days; missing days stay gaps. The 24-hour cache lifetime is not the game's sales calculation window. Market and trade views use a 15-minute decision freshness threshold and offer targeted refresh. Failed refreshes preserve the last successful value and its original timestamp. Unknown prices, missing rarities and errors remain explicit. The native average does not isolate shiny prices.
 
-On the collection page, load the full index and its prices to open **Les plus chères**: a paginated ranking with missing prices, individual copies and sale proposals. **Préparer la vente** opens the chosen copy in the game's auction form; apply the proposal if desired, check the copy and its protections, then confirm in the native form. Toolbox shows the average, its age and the difference from the entered price. **Mes ventes** gathers active and observed past sales. **Annonces comparables actives** searches listings on demand and checks catalogue ID, rarity and shiny status; a partial search is labelled explicitly. Asking prices and averages do not guarantee a final sale price.
+Explicitly concluded sales observed in free native market responses form a separate, account-local sample. The inspector shows a median after 5 sales across 3 UTC days and an indicative Q1–Q3 range after 10 sales. These observations are incomplete; averages, asking prices and actual sale results remain distinct. The price panel also includes exact-rarity threshold alerts, missing-price diagnostics, listing comparisons and a local dashboard. Alerts only react to fresh price reads, with no continuous market polling.
 
-**Valeur de la collection** totals known native rarity averages for loaded copies and duplicates, with unvalued coverage, stale prices and a partial-index warning. Shiny copies remain unvalued because the native summary does not isolate their price. Price details also show an account-local sample of explicitly concluded sales observed in free market history or visited listings: a median after 5 sales on 3 distinct days, and an indicative Q1–Q3 range after 10 sales. The sample is incomplete and does not predict a sale price. Sale/trade views flag prices older than 15 minutes and offer targeted refresh; album browsing keeps the 24-hour cache policy.
+**Données et caches** shows cache size and synchronization dates and lets you clear price summaries, local price observations and the current account's concluded-sale sample. No full collection index or game-action journal is stored. There is no developer-operated backend, analytics or advertising; see [PRIVACY.md](PRIVACY.md).
 
-Each supported page also offers **Données et caches**: check synchronization dates and cache size, or clear collection data for the current account, shared prices, local price observations, and the current account’s concluded-sale sample separately. Pack settings and summaries are isolated by account; older shared automatic-opening settings are not inherited. Toolbox pauses affected tools when the game's data or card layout no longer matches its adapters.
+Toolbox is an independent project and is not approved by WikiMasters. Price tools use automated read requests and observation of native responses. The [community rules](https://www.wiki-masters.com/rules) restrict automation and traffic interception; this project does not claim that its price tools are authorized. All gameplay remains in the native game interface.
 
 ## Installation
 
@@ -49,7 +49,7 @@ pnpm build
 
 Open `chrome://extensions/`, enable **Developer mode**, choose **Load unpacked**, and select the generated `dist/` directory. After editing the source, rebuild, reload the extension, then reload the WikiMasters tab.
 
-The extension runs against the live game. For browser testing, use a dedicated account and check which actions consume packs or change cards before executing them.
+Browser verification uses the connected account for read-only price flows. Restricted accounts or temporary server failures may prevent verification; report those limits explicitly.
 
 ### Commands
 
@@ -68,8 +68,8 @@ The extension runs against the live game. For browser testing, use a dedicated a
 src/
 ├── content.ts          # Startup, navigation and page events
 ├── network.ts          # Bridge for relevant native game responses
-├── cards.ts            # Card and possession identity mapping
-├── content/            # Collection, prices, packs and shared Toolbox UI
+├── cards.ts            # Catalogue and rarity identity mapping
+├── content/            # Price models, caches and shared Toolbox UI
 └── toolbox.css         # Styles scoped to the extension's shadow roots
 tests/                  # Node tests and mocked game responses
 scripts/                # Build, packaging and Store publication

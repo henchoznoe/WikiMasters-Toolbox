@@ -151,13 +151,15 @@ export function cancelRequests(): void {
   jobs.clear()
   reads.clear()
 }
+
 onAccountChange(cancelRequests)
 
 export async function requestData(
   url: string,
   signal?: AbortSignal,
-  init: RequestInit = {},
 ): Promise<{ response: Response; json: unknown }> {
+  if (!isAllowedRead(url))
+    throw new RequestAdmissionError('Lecture hors du périmètre prix')
   const request = new AbortController()
   const current = scope.signal
   const sources = [current, ...(signal ? [signal] : [])]
@@ -177,7 +179,7 @@ export async function requestData(
       json: unknown
     }> => {
       const response = await fetch(url, {
-        ...init,
+        method: 'GET',
         credentials: 'include',
         signal: request.signal,
       })
@@ -198,9 +200,9 @@ export async function requestData(
           )
       }
       saveBudget()
-      if (response.status === 401) {
+      if (response.status === 401 || response.status === 403) {
         setAccountId(null)
-        throw new SessionExpiredError('Session expirée')
+        throw new SessionExpiredError('Session expirée ou accès restreint')
       }
       // The timeout covers decoding too. Recheck scope when a fetch implementation ignores abort.
       let json: unknown
@@ -344,34 +346,13 @@ async function readJson(
   return json as Record<string, unknown>
 }
 
-let writeSequence = 0
-/** Writes share scheduling and timeout, but are never deduplicated or retried. */
-export async function requestWrite(
-  url: string,
-  signal: AbortSignal,
-  init: RequestInit,
-): Promise<{ response: Response; json: unknown }> {
-  const expected = epoch
-  let result: { response: Response; json: unknown } | undefined
-  let failure: unknown
-  await scheduleRead(
-    `write:${++writeSequence}`,
-    async () => {
-      if (signal.aborted || expected !== epoch) return
-      try {
-        result = await requestData(url, signal, { ...init, method: 'POST' })
-      } catch (cause) {
-        failure = cause
-      }
-    },
-    signal,
+export function isAllowedRead(url: string): boolean {
+  return (
+    /^\/api\/marketplace\/cards\/[^/?#]+\/sales\?scope=summary$/.test(url) ||
+    url === '/api/my-collection?sort=rarity&page=0&stats=0' ||
+    url === '/api/cards?page=0&sort=rarity' ||
+    url === '/api/trades' ||
+    url === '/api/marketplace?page=1&limit=50' ||
+    /^\/api\/marketplace\/[0-9a-f-]{36}$/.test(url)
   )
-  if (failure) throw failure
-  if (!result)
-    throw new Error(requestLimit() || 'Écriture arrêtée avant l’envoi')
-  return result
-}
-
-export function serverPauseMs(): number {
-  return Math.max(0, cooldown - Date.now())
 }
