@@ -42,7 +42,9 @@ export function renderDataControls(): void {
   )
   const text =
     [...issues, requestLimit()].filter(Boolean).join(' · ') ||
-    'Prix publics · cartes visibles chargées automatiquement'
+    (/^\/pulls\/?$/.test(location.pathname)
+      ? 'Paquets observés localement · ouvertures dans le jeu'
+      : 'Prix publics · cartes visibles chargées automatiquement')
   if (status.textContent !== text) status.textContent = text
   const summary = root.querySelector<HTMLElement>(
     '[data-wm-toolbox-data] > summary',

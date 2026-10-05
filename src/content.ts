@@ -26,6 +26,14 @@ import {
   resetRegisteredCards,
   setPriceRenderCallback,
 } from './content/prices'
+import {
+  leavePulls,
+  observeNativePull,
+  setPullObserverCallback,
+  syncPullObservation,
+} from './content/pulls-observer'
+import { renderPullsPanel } from './content/pulls-panel'
+import { setPullsCallback } from './content/pulls-store'
 import { cancelRequests, setRequestCallback } from './content/requests'
 import { toolboxPages } from './content/routes'
 import { type SaleSample, validSample } from './content/sales-model'
@@ -43,6 +51,8 @@ function scheduleRender(): void {
     renderCards()
     renderMarketplace()
     syncToolboxPanel(location.pathname, toolboxPages)
+    syncPullObservation()
+    renderPullsPanel()
     renderPricePanel()
     renderPriceInspector()
     renderDataControls()
@@ -52,7 +62,11 @@ setPriceRenderCallback(scheduleRender)
 setRequestCallback(scheduleRender)
 onCompatibilityChange(scheduleRender)
 onCacheChange(scheduleRender)
+setPullsCallback(scheduleRender)
+setPullObserverCallback(scheduleRender)
 onAccountChange(() => {
+  leavePulls()
+  cancelRequests()
   cancelRouteRead()
   cancelPriceBatch()
   resetToolboxPanel()
@@ -72,7 +86,9 @@ if (!contentWindow.__wmToolboxContentInstalled) {
         return
       }
       if (data.accountId !== getAccountId()) return
-      if (data.kind === 'price-listings') observePriceListings(data.listings)
+      if (data.kind === 'pull-result') observeNativePull(data.id, data.cards)
+      else if (data.kind === 'price-listings')
+        observePriceListings(data.listings)
       else if (data.kind === 'sale-samples' && Array.isArray(data.samples))
         observeSaleSamples(
           data.samples
@@ -100,9 +116,12 @@ if (!contentWindow.__wmToolboxContentInstalled) {
   let previousPath = location.pathname + location.search
   const observer = new MutationObserver(() => {
     if (location.pathname + location.search !== previousPath) {
+      observer.disconnect()
+      observePage()
       cancelRouteRead()
       cancelPriceBatch()
       cancelRequests()
+      leavePulls()
       resetRegisteredCards()
       clearPriceListings()
       resetCompatibility()
@@ -113,13 +132,23 @@ if (!contentWindow.__wmToolboxContentInstalled) {
     }
     scheduleRender()
   })
+  function observePage(): void {
+    observer.observe(document.body, {
+      childList: true,
+      characterData: true,
+      // Price layout changes must not repeatedly trigger their own renderer.
+      attributes: /^\/pulls\/?$/.test(location.pathname),
+      attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'],
+      subtree: true,
+    })
+  }
   const start = (): void => {
     if (!document.body) {
       requestAnimationFrame(start)
       return
     }
     cleanCaches()
-    observer.observe(document.body, { childList: true, subtree: true })
+    observePage()
     scheduleRender()
     void hydrateRoute()
   }
