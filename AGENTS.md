@@ -2,9 +2,9 @@
 
 ## Scope
 
-WikiMasters Toolbox is a Chrome Manifest V3 extension dedicated to card prices for WikiMasters. Every option must work with a free game account. Use only price data available to that account; do not add subscription-dependent endpoints, upgrade prompts or paid-account branches.
+WikiMasters Toolbox is a Chrome Manifest V3 extension for card prices and passive pack statistics in WikiMasters. Every option must work with a free game account. Use only data available to that account; do not add subscription-dependent endpoints, upgrade prompts or paid-account branches.
 
-Keep the scope limited to price references, graphs, freshness, refresh, local observations, concluded-sale estimates, diagnostics. Automated reads for those tools are in scope. Do not add gameplay actions, background gameplay schedules, collection management, native form prefilling or write endpoints. Do not claim official approval or compliance of the price tools with the game's rules.
+Keep the scope limited to price references, graphs, freshness, refresh, local observations, concluded-sale estimates, diagnostics, and passive statistics on `/pulls`. Automated price reads are in scope. The pack exception permits observing minimal card metadata from successful native `/api/packs/open` responses; show only revealed cards and count only after all five cards have been revealed in the native UI. Do not add gameplay actions, background gameplay schedules, collection management, native form prefilling or Toolbox write requests. Do not claim official approval or compliance with the game's rules.
 
 All user-facing Toolbox text must be in French, including tooltips, confirmations, errors and accessibility labels. Format displayed numbers and dates using French conventions. Display dates and times in the Bern time zone (`Europe/Zurich`, UTC+2 in summer and UTC+1 in winter). Keep code identifiers, protocol values, storage keys and technical documentation in English; `ROADMAP.md` is in French. Preserve native card titles and user-provided content.
 
@@ -14,7 +14,7 @@ The interface should remain compact and consistent with the game. Use compact sp
 
 ## Architecture
 
-- `src/network.ts` runs in the page's main world and observes relevant native fetch/XHR responses. Forward only the metadata needed by Toolbox; leave the game's requests and responses intact.
+- `src/network.ts` runs in the page's main world and observes relevant native fetch/XHR responses. Forward only price metadata and minimal native pack results; leave the game's requests and responses intact. Never read challenge tokens or initiate pack requests.
 - `src/content.ts` runs in the isolated content-script world and coordinates startup, account changes, SPA navigation and rendering.
 - Keep domain logic in `src/content/`. Register page panels in `routes.ts` and reuse `panel.ts` and shared shadow-root helpers.
 - Use `src/cards.ts` for identity mapping. Catalogue IDs identify price requests. A title match is display-only and must reject ambiguous catalogue or rarity identities.
@@ -26,8 +26,9 @@ The interface should remain compact and consistent with the game. Use compact sp
 - Keep prices tied to the exact rarity. Unknown prices or missing data must remain explicit; do not substitute another rarity or invent market history.
 - The price cache lasts 24 hours; that is not the game's sales calculation window. Preserve original fetch timestamps when a refresh fails.
 - Reuse request deduplication, budgets, timeouts, cancellation and server pauses. Avoid adding parallel or repeated requests outside the existing request policies.
-- The shared transport must accept only allowlisted read URLs and send GET requests. Native game requests and responses must remain intact; observe only metadata needed for prices.
-- Do not add migration or legacy compatibility modules: this is a fresh, price-only extension.
+- The shared transport must accept only allowlisted read URLs and send GET requests. Native game requests and responses must remain intact. Pack response observation does not authorize Toolbox POST requests.
+- Keep pack aggregates account-scoped and last revealed results in tab session storage. Use Bern calendar days and cross-tab locks; never count a restored result automatically or persist unrevealed cards.
+- Do not add migration or legacy compatibility modules; do not restore former gameplay modules or settings.
 - Keep credentials, authentication headers, cookies, session data and live account inventory out of source files, logs, documentation and PR descriptions. Update `PRIVACY.md` when local storage or data use changes.
 
 ## Development and verification

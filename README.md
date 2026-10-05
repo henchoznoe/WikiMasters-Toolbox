@@ -4,7 +4,7 @@
 
 # WikiMasters Toolbox
 
-Card price references, freshness and local price charts for WikiMasters.
+Card price references, local price charts and passive pack statistics for WikiMasters.
 
 [![CI](https://github.com/henchoznoe/WikiMasters-Toolbox/actions/workflows/ci.yml/badge.svg)](https://github.com/henchoznoe/WikiMasters-Toolbox/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/henchoznoe/WikiMasters-Toolbox)](https://github.com/henchoznoe/WikiMasters-Toolbox/releases/latest)
@@ -30,6 +30,10 @@ Explicitly concluded sales observed in free native market responses form a separ
 
 **Données et caches** shows cache size and synchronization dates and lets you clear price summaries, local price observations and the current account's concluded-sale sample. No full collection index or game-action journal is stored. There is no developer-operated backend, analytics or advertising; see [PRIVACY.md](PRIVACY.md).
 
+On **`/pulls`**, the **Paquets** panel counts results only after all five cards have been revealed through the native carousel. It observes minimal metadata from the game's own successful pack response to identify cards, without initiating an opening request. Each revealed card gets a rarity badge. The panel shows today's account-local counts, a cumulative sample, rarity proportions, known shiny cards and unknown states. Bern midnight starts a new daily sample without deleting the cumulative totals. **Réinitialiser les statistiques** clears both samples for the current account after confirmation.
+
+The last recorded pack stays in the current tab's session, with card titles, rarity, shiny state and available price references. Prices use the existing shared GET queue; missing or ambiguous identities and shiny prices stay unknown. There is no durable card journal. Restored results require manual registration after all five positions have been visited; observation receipts prevent recounting an already registered result after a reload or reset. If local storage is unavailable, the UI identifies temporary tab-only counters. Old automatic-opening settings are ignored.
+
 Toolbox is an independent project and is not approved by WikiMasters. Price tools use automated read requests and observation of native responses. The [community rules](https://www.wiki-masters.com/rules) restrict automation and traffic interception; this project does not claim that its price tools are authorized. All gameplay remains in the native game interface.
 
 ## Installation
@@ -49,7 +53,7 @@ pnpm build
 
 Open `chrome://extensions/`, enable **Developer mode**, choose **Load unpacked**, and select the generated `dist/` directory. After editing the source, rebuild, reload the extension, then reload the WikiMasters tab.
 
-Browser verification uses the connected account for read-only price flows. Restricted accounts or temporary server failures may prevent verification; report those limits explicitly.
+Browser verification uses the connected account for read-only price flows and observation of user-triggered native openings. Restricted accounts or temporary server failures may prevent verification; report those limits explicitly.
 
 ### Commands
 

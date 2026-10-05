@@ -1,6 +1,6 @@
 # Privacy policy — WikiMasters Toolbox
 
-Last updated: October 4, 2026.
+Last updated: October 5, 2026.
 
 WikiMasters Toolbox runs only on `https://www.wiki-masters.com/`. It reads catalogue identifiers, titles, rarity and shiny status from collection, catalogue, marketplace, trade and peer-collection responses to display price references. It observes the game's native fetch/XHR responses without changing their requests or responses. For catalogue pages restored without a network request, it reads public card metadata from the game's tab cache and ignores ownership and friend fields. Card identities stay in memory while the page is open; no full collection index is saved.
 
@@ -12,10 +12,16 @@ The detected account ID scopes concluded-sale samples. Account changes cancel re
 
 Listing comparisons stay in memory and retain only price-related fields, never seller or buyer details. The panel's collapsed state is stored locally.
 
+On `/pulls`, the extension observes successful native pack-opening responses and forwards only catalogue identifiers, titles, exact rarity and explicit shiny status. It never initiates an opening request or reads the request body. Native result metadata stays in memory while the current pack is being revealed. Only cards already revealed in the native carousel appear in Toolbox; a pack is counted after all five positions have been observed. There is no polling of pack endpoints, gameplay scheduling or automatic opening.
+
+Pack counts are stored locally per detected account: daily and cumulative pack/card totals, rarity totals including unknowns, shiny and unknown-shiny totals, the Bern calendar day and sample start time. Up to 100 recent observation identifiers support deduplication; these aggregates contain no card titles, catalogue identifiers or possession inventory. Daily counts roll over at Bern midnight, including summer/winter time, while cumulative counts remain until reset or site data removal. Cross-tab updates use browser locks. If storage fails, temporary counters stay in the current tab and the interface states this limitation.
+
+Tab session storage retains only the last fully revealed recorded pack per account, with its observation identifier, timestamp, five titles, rarities, shiny states and reliable catalogue identifiers. It also retains a minimal active observation identifier and completion flag to prevent recounting after reloading or resetting statistics, even after older aggregate receipts expire. Unrevealed cards are never persisted. Closing the tab normally removes session data; browser session restoration follows Chrome's session-storage behavior. A new recorded pack replaces the previous result. **Réinitialiser les statistiques** clears both current-account aggregates after confirmation and keeps deduplication metadata; it does not erase shared price caches or recount the last pack. Clearing WikiMasters site data removes all Toolbox pack data.
+
 **Données et caches** displays synchronization times and storage size and lets you clear shared summaries, shared price observations and the current account's concluded-sale sample separately. Clearing WikiMasters site data removes all locally stored Toolbox data.
 
-The extension does not read or store credentials, authentication headers, cookies, session tokens or challenge tokens. It stores no gameplay settings or action journals and does not access other websites or browsing history. No analytics, advertising or developer-operated backend is used. The developer receives none of the requests or account data.
+The extension does not read or store credentials, authentication headers, cookies, session tokens or challenge tokens. It stores no gameplay automation settings or durable card/action journals and does not access other websites or browsing history. No analytics, advertising or developer-operated backend is used. The developer receives none of the requests or account data.
 
-Toolbox is an independent project, not approved by WikiMasters. Its automated price reads and native response observation must not be presented as officially authorized by the game.
+Toolbox is an independent project, not approved by WikiMasters. Its automated price reads and native price/pack response observation must not be presented as officially authorized by the game.
 
 For questions, open an issue in the [project repository](https://github.com/henchoznoe/WikiMasters-Toolbox/issues) without including credentials or account data.

@@ -34,7 +34,7 @@ const json = data =>
   new Response(JSON.stringify(data), {
     headers: { 'Content-Type': 'application/json' },
   })
-async function bridge(fetch) {
+async function bridge(fetch, XHR) {
   const events = []
   const context = {
     window: {
@@ -43,11 +43,14 @@ async function bridge(fetch) {
     },
     Request,
     URL,
+    crypto: { randomUUID: () => 'native-pull-fixture' },
     location: { origin },
-    XMLHttpRequest: class {
-      open() {}
-      send() {}
-    },
+    XMLHttpRequest:
+      XHR ??
+      class {
+        open() {}
+        send() {}
+      },
     CustomEvent: class {
       constructor(_type, options) {
         this.detail = options.detail
@@ -55,7 +58,7 @@ async function bridge(fetch) {
     },
   }
   vm.runInNewContext(await readFile('dist/network.js', 'utf8'), context)
-  return { events, window: context.window }
+  return { events, window: context.window, XHR: context.XMLHttpRequest }
 }
 const settle = () => new Promise(resolve => setTimeout(resolve, 0))
 
@@ -100,12 +103,18 @@ test('Toolbox transport rejects unrelated URLs and can only send GET price reads
   ])
 })
 
-test('native game actions pass through unchanged and are never consumed by the price bridge', async () => {
+test('native actions stay unchanged; pack responses forward only result metadata', async () => {
   const calls = []
   const { events, window } = await bridge(async (...args) => {
     calls.push(args)
     return json({
-      cards: [{ id: 'card', wikipedia_title: 'Fixture', rarity: 'R' }],
+      cards: Array.from({ length: 5 }, () => ({
+        id: A,
+        wikipedia_title: 'Fixture',
+        rarity: 'R',
+        is_shiny: false,
+        privateField: 'private',
+      })),
       auction_id: A,
     })
   })
@@ -118,10 +127,23 @@ test('native game actions pass through unchanged and are never consumed by the p
     const init = { method: 'POST', body: 'native body' }
     const response = await window.fetch(url, init)
     assert.equal(calls.at(-1)[1], init)
-    assert.equal((await response.json()).cards[0].id, 'card')
+    assert.equal((await response.json()).cards[0].id, A)
   }
   await settle()
-  assert.deepEqual(events, [])
+  assert.deepEqual(events, [
+    {
+      kind: 'pull-result',
+      accountId: null,
+      id: 'native-pull-fixture',
+      cards: Array.from({ length: 5 }, () => ({
+        catalogueId: A,
+        title: 'Fixture',
+        rarity: 'R',
+        shiny: false,
+      })),
+    },
+  ])
+  assert.equal(JSON.stringify(events).includes('private'), false)
 })
 
 test('price bridge preserves native responses, strips private metadata and forwards exact card variants', async () => {
@@ -150,6 +172,104 @@ test('price bridge preserves native responses, strips private metadata and forwa
     },
   ])
   assert.equal(JSON.stringify(events).includes('private'), false)
+})
+
+test('failed openings and human verification produce no pack result or retry', async () => {
+  const calls = []
+  const { events, window } = await bridge(async (...args) => {
+    calls.push(args)
+    return new Response(
+      JSON.stringify({
+        human_verification_required: true,
+        challenge_token: 'must-not-forward',
+        cards: [],
+      }),
+      { status: 400 },
+    )
+  })
+  const init = { method: 'POST', body: 'native body' }
+  const response = await window.fetch('/api/packs/open', init)
+  await settle()
+  assert.equal(response.status, 400)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0][1], init)
+  assert.deepEqual(events, [])
+})
+
+test('native XHR pack results strip private fields and leave open/send arguments intact', async () => {
+  const calls = []
+  class NativeXHR {
+    status = 200
+    responseType = 'json'
+    response = {
+      cards: Array.from({ length: 5 }, () => ({
+        id: A,
+        wikipedia_title: 'Fixture',
+        rarity: 'PC',
+        is_shiny: true,
+        user_card_id: 'private-copy',
+      })),
+      challenge_token: 'private',
+    }
+    listeners = []
+    open(...args) {
+      calls.push(args)
+    }
+    addEventListener(_name, callback) {
+      this.listeners.push(callback)
+    }
+    send(...args) {
+      calls.push(args)
+      for (const listener of this.listeners) listener()
+    }
+  }
+  const { events, XHR } = await bridge(() => {
+    throw new Error('Unexpected fetch')
+  }, NativeXHR)
+  const request = new XHR()
+  request.open('POST', '/api/packs/open', true)
+  request.send('native body')
+  assert.deepEqual(calls, [
+    ['POST', '/api/packs/open', true, undefined, undefined],
+    ['native body'],
+  ])
+  assert.equal(events[0].kind, 'pull-result')
+  assert.equal(events[0].cards[0].shiny, true)
+  assert.equal(JSON.stringify(events).includes('private'), false)
+})
+
+test('a late native pack response is discarded when the detected account changes', async () => {
+  let account = A
+  let complete
+  const { events, window } = await bridge(async url =>
+    String(url).includes('get_my_profile')
+      ? json({ id: account })
+      : new Promise(resolve => {
+          complete = resolve
+        }),
+  )
+  const profile = 'https://fixture.supabase.co/rest/v1/rpc/get_my_profile'
+  await window.fetch(profile)
+  await settle()
+  const pending = window.fetch('/api/packs/open', { method: 'POST' })
+  account = B
+  await window.fetch(profile)
+  await settle()
+  complete(
+    json({
+      cards: Array.from({ length: 5 }, () => ({
+        id: A,
+        wikipedia_title: 'Fixture',
+        rarity: 'R',
+      })),
+    }),
+  )
+  await pending
+  await settle()
+  assert.equal(
+    events.some(event => event.kind === 'pull-result'),
+    false,
+  )
 })
 
 test('late native page responses cannot leak card identities into a different account', async () => {
@@ -189,7 +309,7 @@ test('late native page responses cannot leak card identities into a different ac
   )
 })
 
-test('pack page installs no Toolbox controls or requests even with old settings present', async () => {
+test('pack route is passive and never imports old gameplay modules or settings', async () => {
   const timers = []
   const intervals = []
   const storage = memory([
@@ -235,7 +355,15 @@ test('pack page installs no Toolbox controls or requests even with old settings 
       throw new Error('Unexpected pack request')
     },
   }
-  vm.runInNewContext(await readFile('dist/content.js', 'utf8'), c)
+  vm.runInNewContext(
+    await bundle(
+      "import {toolboxPages} from './src/content/routes.ts';globalThis.pages=toolboxPages",
+    ),
+    c,
+  )
+  const page = c.pages.find(page => page.matches('/pulls'))
+  assert.equal(page.id, 'pulls')
+  assert.equal(page.read, undefined)
   for (const callback of intervals) callback()
   for (const callback of timers.splice(0)) callback()
   assert.ok(storage.getItem(`wm_toolbox_auto_v2:${A}`))
