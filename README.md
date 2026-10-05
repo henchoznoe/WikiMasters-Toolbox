@@ -104,12 +104,14 @@ The delivery path is **feature branch → `develop` → `main` → GitHub Releas
 
 1. [CI](.github/workflows/ci.yml) checks pull requests and pushes to `develop` and `main`, then builds a downloadable Chrome ZIP.
 2. A merge to `main` runs the [release workflow](.github/workflows/release.yml). [semantic-release](release.config.mjs) determines whether a release is needed and calculates its version from Conventional Commits and existing tags.
-3. For a new release, the workflow applies the version in its workspace, creates the Git tag, and attaches the versioned ZIP to a GitHub Release. It does not push a version commit back to `main`.
-4. With `CWS_ENABLED=true`, that release dispatches [Publish Chrome extension](.github/workflows/publish-chrome.yml). It checks out the release tag, applies its version, rebuilds and verifies the package, then uploads it and submits it to the Chrome Web Store. Google controls review and final availability.
+3. For a new release, the workflow updates `package.json` and `manifest.json`, verifies the package, and commits those two files to `main` with `chore(release): <version> [skip ci]`. The release tag points to that commit, and its versioned ZIP is attached to the GitHub Release. The release is then merged back into `develop`, preserving any newer development commits.
+4. With `CWS_ENABLED=true`, that release dispatches [Publish Chrome extension](.github/workflows/publish-chrome.yml). It downloads the exact GitHub Release ZIP, checks that its manifest matches the tag, then uploads it and submits it to the Chrome Web Store. Google controls review and final availability.
 
-Merging a PR into `develop` validates the change; Store delivery starts from a new release on `main`. The tracked version in `package.json` and `manifest.json` is development metadata. Use the versioned GitHub Release ZIP for a manual Store upload.
+Merging a PR into `develop` validates the change; Store delivery starts from a new release on `main`. The tracked version follows the latest release; semantic-release calculates the next version from tags and commits. Merge `develop` into `main` with a merge commit to preserve that history. If release synchronization fails, merge `main` back into `develop` before the next release PR. Use the versioned GitHub Release ZIP for a manual Store upload.
 
 ### Maintainer setup
+
+The **`release`** GitHub environment contains **`RELEASE_SSH_KEY`**, the private half of a repository write deploy key reserved for semantic-release. Restrict this environment to `main`. The `main` rulesets require an up-to-date GitHub Actions `check`, a pull request and resolved review threads; write deploy keys can bypass only these release requirements. A separate ruleset prevents deletion and force pushes without any bypass. Keep the release key as the only write deploy key; administrators remain subject to the PR rules. The normal `GITHUB_TOKEN` creates GitHub releases and dispatches publication.
 
 Configure the publishing account and OAuth access using the [Chrome Web Store API guide](https://developer.chrome.com/docs/webstore/using-api). Publication uses the GitHub environment **`chrome-web-store`** and these repository or environment secrets:
 
@@ -127,7 +129,7 @@ Set the repository variable **`CWS_ENABLED=true`** once the Store item and crede
 node scripts/publish-chrome.mjs --verify
 ```
 
-To retry a failed submission, run **Actions → Publish Chrome extension → Run workflow** on `main` with the existing release tag. Store listing text, screenshots and privacy declarations are maintained separately in the Developer Dashboard.
+To retry a failed submission, run **Actions → Publish Chrome extension → Run workflow** on `main` with the existing release tag. After verifying the new ZIP, the workflow automatically cancels a pending review only when its known version is strictly older than the new release, confirms cancellation, then submits the new package. Google reviews the replacement as a new submission and limits cancellations to six per publisher per day. An identical, newer or unknown pending version stops the workflow before cancellation or upload; a version at or below the published version is also refused. Publication and cancellation writes are never automatically retried. Store listing text, screenshots and privacy declarations are maintained separately in the Developer Dashboard.
 
 ## License
 
