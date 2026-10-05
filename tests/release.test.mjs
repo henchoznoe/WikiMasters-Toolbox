@@ -83,7 +83,14 @@ test('semantic-release commits both version files and sync preserves newer devel
   )
   await releaseGit.prepare(options, {
     cwd: fixture.root,
-    env: process.env,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'github-actions[bot]',
+      GIT_AUTHOR_EMAIL: '41898282+github-actions[bot]@users.noreply.github.com',
+      GIT_COMMITTER_NAME: 'github-actions[bot]',
+      GIT_COMMITTER_EMAIL:
+        '41898282+github-actions[bot]@users.noreply.github.com',
+    },
     branch: { name: 'main' },
     options: { repositoryUrl: remote },
     lastRelease: { version: '1.2.0', gitTag: 'v1.2.0' },
@@ -93,6 +100,10 @@ test('semantic-release commits both version files and sync preserves newer devel
   assert.equal(
     git('log', '-1', '--format=%s'),
     'chore(release): 1.3.0 [skip ci]',
+  )
+  assert.equal(
+    git('log', '-1', '--format=%ae'),
+    '41898282+github-actions[bot]@users.noreply.github.com',
   )
   assert.deepEqual(
     git('diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD')
