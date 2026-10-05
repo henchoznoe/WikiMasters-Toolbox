@@ -4,7 +4,7 @@
 
 # WikiMasters Toolbox
 
-Card price references, freshness and local price charts for WikiMasters.
+Card price references, local price charts and passive pack statistics for WikiMasters.
 
 [![CI](https://github.com/henchoznoe/WikiMasters-Toolbox/actions/workflows/ci.yml/badge.svg)](https://github.com/henchoznoe/WikiMasters-Toolbox/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/henchoznoe/WikiMasters-Toolbox)](https://github.com/henchoznoe/WikiMasters-Toolbox/releases/latest)
@@ -30,6 +30,10 @@ Explicitly concluded sales observed in free native market responses form a separ
 
 **Données et caches** shows cache size and synchronization dates and lets you clear price summaries, local price observations and the current account's concluded-sale sample. No full collection index or game-action journal is stored. There is no developer-operated backend, analytics or advertising; see [PRIVACY.md](PRIVACY.md).
 
+On **`/pulls`**, the **Paquets** panel counts results only after all five cards have been revealed through the native carousel. It observes minimal metadata from the game's own successful pack response to identify cards, without initiating an opening request. Each revealed card gets a rarity badge. The panel shows today's account-local counts, a cumulative sample, rarity proportions, known shiny cards and unknown states. Bern midnight starts a new daily sample without deleting the cumulative totals. **Réinitialiser les statistiques** clears both samples for the current account after confirmation.
+
+The last recorded pack stays in the current tab's session, with card titles, rarity, shiny state and available price references. Prices use the existing shared GET queue; missing or ambiguous identities and shiny prices stay unknown. There is no durable card journal. Restored results require manual registration after all five positions have been visited; observation receipts prevent recounting an already registered result after a reload or reset. If local storage is unavailable, the UI identifies temporary tab-only counters. Old automatic-opening settings are ignored.
+
 Toolbox is an independent project and is not approved by WikiMasters. Price tools use automated read requests and observation of native responses. The [community rules](https://www.wiki-masters.com/rules) restrict automation and traffic interception; this project does not claim that its price tools are authorized. All gameplay remains in the native game interface.
 
 ## Installation
@@ -49,7 +53,7 @@ pnpm build
 
 Open `chrome://extensions/`, enable **Developer mode**, choose **Load unpacked**, and select the generated `dist/` directory. After editing the source, rebuild, reload the extension, then reload the WikiMasters tab.
 
-Browser verification uses the connected account for read-only price flows. Restricted accounts or temporary server failures may prevent verification; report those limits explicitly.
+Browser verification uses the connected account for read-only price flows and observation of user-triggered native openings. Restricted accounts or temporary server failures may prevent verification; report those limits explicitly.
 
 ### Commands
 
@@ -100,12 +104,14 @@ The delivery path is **feature branch → `develop` → `main` → GitHub Releas
 
 1. [CI](.github/workflows/ci.yml) checks pull requests and pushes to `develop` and `main`, then builds a downloadable Chrome ZIP.
 2. A merge to `main` runs the [release workflow](.github/workflows/release.yml). [semantic-release](release.config.mjs) determines whether a release is needed and calculates its version from Conventional Commits and existing tags.
-3. For a new release, the workflow applies the version in its workspace, creates the Git tag, and attaches the versioned ZIP to a GitHub Release. It does not push a version commit back to `main`.
-4. With `CWS_ENABLED=true`, that release dispatches [Publish Chrome extension](.github/workflows/publish-chrome.yml). It checks out the release tag, applies its version, rebuilds and verifies the package, then uploads it and submits it to the Chrome Web Store. Google controls review and final availability.
+3. For a new release, the workflow updates `package.json` and `manifest.json`, verifies the package, and commits those two files to `main` with `chore(release): <version> [skip ci]`. The release tag points to that commit, and its versioned ZIP is attached to the GitHub Release. The release is then merged back into `develop`, preserving any newer development commits.
+4. With `CWS_ENABLED=true`, that release dispatches [Publish Chrome extension](.github/workflows/publish-chrome.yml). It downloads the exact GitHub Release ZIP, checks that its manifest matches the tag, then uploads it and submits it to the Chrome Web Store. Google controls review and final availability.
 
-Merging a PR into `develop` validates the change; Store delivery starts from a new release on `main`. The tracked version in `package.json` and `manifest.json` is development metadata. Use the versioned GitHub Release ZIP for a manual Store upload.
+Merging a PR into `develop` validates the change; Store delivery starts from a new release on `main`. The tracked version follows the latest release; semantic-release calculates the next version from tags and commits. Merge `develop` into `main` with a merge commit to preserve that history. If release synchronization fails, merge `main` back into `develop` before the next release PR. Use the versioned GitHub Release ZIP for a manual Store upload.
 
 ### Maintainer setup
+
+The **`release`** GitHub environment contains **`RELEASE_SSH_KEY`**, the private half of a repository write deploy key reserved for semantic-release. Restrict this environment to `main`. The `main` rulesets require an up-to-date GitHub Actions `check`, a pull request and resolved review threads; write deploy keys can bypass only these release requirements. A separate ruleset prevents deletion and force pushes without any bypass. Keep the release key as the only write deploy key; administrators remain subject to the PR rules. The normal `GITHUB_TOKEN` creates GitHub releases and dispatches publication.
 
 Configure the publishing account and OAuth access using the [Chrome Web Store API guide](https://developer.chrome.com/docs/webstore/using-api). Publication uses the GitHub environment **`chrome-web-store`** and these repository or environment secrets:
 
@@ -123,7 +129,7 @@ Set the repository variable **`CWS_ENABLED=true`** once the Store item and crede
 node scripts/publish-chrome.mjs --verify
 ```
 
-To retry a failed submission, run **Actions → Publish Chrome extension → Run workflow** on `main` with the existing release tag. Store listing text, screenshots and privacy declarations are maintained separately in the Developer Dashboard.
+To retry a failed submission, run **Actions → Publish Chrome extension → Run workflow** on `main` with the existing release tag. After verifying the new ZIP, the workflow automatically cancels a pending review only when its known version is strictly older than the new release, confirms cancellation, then submits the new package. Google reviews the replacement as a new submission and limits cancellations to six per publisher per day. An identical, newer or unknown pending version stops the workflow before cancellation or upload; a version at or below the published version is also refused. Publication and cancellation writes are never automatically retried. Store listing text, screenshots and privacy declarations are maintained separately in the Developer Dashboard.
 
 ## License
 

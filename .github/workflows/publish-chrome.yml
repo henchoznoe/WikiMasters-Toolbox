@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: chrome-web-store
+  cancel-in-progress: false
+
 jobs:
   publish:
     if: vars.CWS_ENABLED == 'true'
@@ -19,24 +23,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 12.4.2
+          ref: main
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Set package version from release tag
+      - name: Download the released Chrome package
         run: |
-          node scripts/set-version.mjs "${RELEASE_TAG#v}"
-          pnpm exec biome format --write package.json manifest.json
+          node scripts/release-package.mjs --validate-tag "$RELEASE_TAG"
+          git merge-base --is-ancestor "$RELEASE_TAG" origin/main
+          gh release download "$RELEASE_TAG" --pattern "wikimasters-toolbox-${RELEASE_TAG#v}.zip" --dir artifacts
+          node scripts/release-package.mjs "$RELEASE_TAG"
         env:
           RELEASE_TAG: ${{ inputs.tag }}
-      - run: pnpm package
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: node scripts/publish-chrome.mjs
         env:
+          RELEASE_TAG: ${{ inputs.tag }}
           CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
           CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
           CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}

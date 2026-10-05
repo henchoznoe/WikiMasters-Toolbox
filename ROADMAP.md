@@ -1,8 +1,8 @@
 # Feuille de route — WikiMasters Toolbox
 
-Mise à jour : 4 octobre 2026.
+Mise à jour : 5 octobre 2026.
 
-WikiMasters Toolbox se concentre uniquement sur les prix des cartes. L’objectif est de donner les références les plus justes possibles avec les données accessibles gratuitement, leur âge et leurs limites. Les lectures et rafraîchissements de prix peuvent être automatisés. Les actions de jeu restent dans l’interface native ; aucun module de gestion de collection ou d’action sur le compte n’entre dans ce périmètre.
+WikiMasters Toolbox se concentre sur les prix des cartes et les statistiques passives des paquets. L’objectif est de donner les références les plus justes possibles avec les données accessibles gratuitement, leur âge et leurs limites. Les lectures et rafraîchissements de prix peuvent être automatisés. Les actions de jeu restent dans l’interface native ; aucun module de gestion de collection ou d’action sur le compte n’entre dans ce périmètre.
 
 L’extension est indépendante et n’est pas approuvée par WikiMasters. Ses lectures automatiques et son observation des réponses natives ne constituent pas une garantie d’autorisation au regard des [règles du jeu](https://www.wiki-masters.com/rules).
 
@@ -22,6 +22,14 @@ L’extension est indépendante et n’est pas approuvée par WikiMasters. Ses l
 - [x] Contrôles de caches, isolation par compte des échantillons, interface française compacte et accessible.
 
 ## Améliorations de précision et de lisibilité
+
+### Paquets observés sur `/pulls`
+
+- [x] **PULLS-01 · P1 — Résultats révélés.** Badges de rareté et dernier paquet dans l’ordre natif. Observation minimale de la réponse native d’ouverture, sans aucune requête d’ouverture Toolbox ; affichage au fur et à mesure des révélations, comptage après les cinq positions. Identités ambiguës et brillantes conservent leurs prix inconnus ; références connues via la file GET partagée, sous-total et couverture visibles.
+- [x] **PULLS-02 · P1 — Statistiques locales.** Vues « Aujourd’hui » et cumul, nombres et proportions par rareté, raretés inconnues et brillance indéterminée explicites. Jour calculé à Berne ; changement de jour sans effacement du cumul. Remise à zéro confirmée du jour et du cumul du compte courant.
+- [x] **PULLS-03 · P1 — Déduplication et confidentialité.** Verrouillage entre onglets, isolation par compte, reçus d’observation et protection contre le recomptage après rechargement ou remise à zéro. Résultat restauré soumis à validation manuelle ; dernier résultat seulement dans la session de l’onglet, aucun historique durable de cartes ni import d’anciens réglages. Stockage indisponible signalé.
+
+### Prix des cartes
 
 - [x] **PRICE-01 · P0 — Fraîcheur au moment d’une décision.** Afficher ensemble la date de lecture, le seuil de 15 min et l’échec éventuel dans les badges du marché et des échanges, les comparaisons et le détail. Conserver l’âge de la dernière lecture réussie ; actualisation ciblée et contexte recalculé à chaque rendu.
 - [x] **PRICE-02 · P0 — Identités ambiguës.** Résoudre la carte par rareté native exacte, titre et ID natif du catalogue lorsqu’il est présent. Rejeter les titres homonymes, ID contradictoires, raretés absentes et variantes brillantes ambiguës ; afficher « Prix inconnu » sans lancer de lecture pour une identité incertaine. Ne pas attribuer de moyenne native ou de graphe normal aux brillantes.

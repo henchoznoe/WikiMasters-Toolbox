@@ -1,5 +1,6 @@
 import { type Card, mapCard } from './cards'
 import { mapPriceListing } from './content/price-comparison'
+import type { PullCard } from './content/pulls-model'
 import { saleSample } from './content/sales-model'
 
 const networkWindow = window as Window & {
@@ -88,6 +89,34 @@ function inspect(url: URL, json: unknown, epoch: number): void {
     return
   }
   const data = json as Record<string, unknown>
+  if (url.pathname === '/api/packs/open') {
+    const raw = Array.isArray(data.cards) ? data.cards : []
+    const cards = raw.map(row => {
+      const identity = mapCard(row, true)
+      if (!identity) return null
+      const entry = row as Record<string, unknown>
+      const source =
+        entry.card && typeof entry.card === 'object'
+          ? (entry.card as Record<string, unknown>)
+          : entry
+      const shiny =
+        typeof entry.is_shiny === 'boolean'
+          ? entry.is_shiny
+          : typeof source.is_shiny === 'boolean'
+            ? source.is_shiny
+            : null
+      return {
+        catalogueId: identity.id,
+        title: identity.title,
+        rarity: identity.rarity,
+        shiny,
+      } satisfies PullCard
+    })
+    compatibility('pulls', raw.length === 5 && cards.every(Boolean))
+    if (raw.length === 5 && cards.every(Boolean))
+      emit({ kind: 'pull-result', accountId, id: crypto.randomUUID(), cards })
+    return
+  }
   if (
     url.pathname === '/api/marketplace' ||
     /^\/api\/marketplace\/[0-9a-f-]{36}$/i.test(url.pathname)
@@ -199,6 +228,12 @@ function isRelevant(url: URL, method: string): boolean {
       url.pathname === '/auth/v1/logout' ||
       url.pathname === '/rest/v1/rpc/get_my_profile'
     )
+  if (
+    url.origin === location.origin &&
+    url.pathname === '/api/packs/open' &&
+    method.toUpperCase() === 'POST'
+  )
+    return true
   if (method.toUpperCase() !== 'GET' || url.origin !== location.origin)
     return false
   return (

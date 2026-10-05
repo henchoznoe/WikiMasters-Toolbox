@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "WikiMasters Toolbox",
-  "version": "1.1.0",
-  "description": "Prix des cartes WikiMasters : moyennes par rareté, cache, fraîcheur et actualisation à la demande.",
+  "version": "1.2.0",
+  "description": "Prix des cartes WikiMasters et statistiques locales des paquets révélés : raretés, références et fraîcheur.",
   "minimum_chrome_version": "111",
   "icons": {
     "16": "icons/icon-16.png",

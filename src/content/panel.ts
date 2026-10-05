@@ -73,7 +73,8 @@ export function syncToolboxPanel(
   header.className = 'wm-panel-header'
   const title = document.createElement('h2')
   title.className = 'wm-panel-title'
-  title.textContent = 'Toolbox · Prix'
+  title.textContent =
+    page.id === 'pulls' ? 'Toolbox · Paquets' : 'Toolbox · Prix'
   const mark = document.createElement('span')
   mark.className = 'wm-panel-mark'
   mark.textContent = page.label
